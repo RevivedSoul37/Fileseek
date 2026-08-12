@@ -16,3 +16,9 @@ __pycache__/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Private ideas, plans, and session notes
+private/
+
+# Local Kilo agent config and worktrees
+.kilo/

@@ -110,7 +110,7 @@ right; the ranker now is too.
 
 ## Verification
 
-`verify_build.py` runs the full suite — **26/26 checks stamped**:
+`scripts/verify_build.py` runs the full suite — **26/26 checks stamped**:
 
 | Check | Stamp |
 |---|---|
@@ -121,10 +121,9 @@ right; the ranker now is too.
 | Incremental add / remove (Phase-2 ready) | PASSED |
 | Category filters return only their drawer | PASSED |
 
-And a human-readable **field test protocol** ships with the repo —
-[`TEST_PLAN.html`](TEST_PLAN.html) turns the checklist into a paper protocol
-sheet where clicking a row slams a red *PASSED* stamp down and a live tally
-counts your progress.
+A human-readable **field test protocol** was authored alongside this build —
+a paper protocol sheet where clicking a row slams a red *PASSED* stamp down
+and a live tally counts your progress.
 
 ![Field test protocol](docs/assets/testplan.png)
 
@@ -160,7 +159,7 @@ skill as **“the night-shift card catalog”**: lacquer green `#0E1915`, aged p
 IBM Plex Mono; signature element is the rubber-stamp match mark.
 
 ```
-docs/            plans, conversation log, skill, screenshots
+docs/            skill, screenshots
 src/modules/     backend
 src/static|templates/  frontend
 data/            your index (git-ignored, rebuilt on launch)
