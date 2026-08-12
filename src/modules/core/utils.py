@@ -35,6 +35,11 @@ ICON_BY_CATEGORY = {
     "other": "\U0001F4C1",
 }
 
+RECORD_FIELDS = (
+    "name", "path", "parent_folder", "extension", "size", "modified",
+    "category", "icon", "sensitive",
+)
+
 EXT_WORDS = {
     ".pdf": "pdf document portable document format report manual",
     ".docx": "word document text report",

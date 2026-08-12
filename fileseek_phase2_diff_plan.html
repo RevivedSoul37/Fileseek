@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FileSeek — Phase 2 Change-Diff: Implementation Plan</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Karla:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+  :root{
+    --lacquer:#0E1915; --drawer:#15221C; --rail:#263B2F;
+    --paper:#F3ECD9; --brass:#C9A227; --stamp:#B3402E;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--lacquer);
+    background-image:radial-gradient(ellipse at 15% -10%, rgba(201,162,39,.07), transparent 55%),
+                      radial-gradient(ellipse at 95% 0%, rgba(179,64,46,.05), transparent 45%);
+    color:var(--paper); font-family:'Karla',sans-serif; line-height:1.62; padding-bottom:70px;
+  }
+  header{max-width:900px;margin:0 auto;padding:56px 24px 0;}
+  .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--brass);margin:0 0 16px;}
+  h1{font-family:'Fraunces',serif;font-weight:600;font-size:clamp(28px,4.2vw,42px);line-height:1.1;margin:0 0 18px;}
+  header p.lede{color:#CFC7AE;font-size:15.5px;max-width:66ch;margin:0 0 20px;}
+
+  .assumption-banner{
+    max-width:900px;margin:0 auto 40px;padding:16px 20px;
+    background:var(--drawer);border-left:3px solid var(--stamp);
+    font-family:'IBM Plex Mono',monospace;font-size:12.8px;color:#D9CBB0;
+  }
+  .assumption-banner strong{color:var(--paper);}
+
+  main{max-width:900px;margin:0 auto;padding:0 24px;}
+
+  nav.toc{margin-bottom:52px;}
+  nav.toc ol{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:9px;list-style:none;margin:0;padding:0;}
+  nav.toc a{display:block;font-family:'IBM Plex Mono',monospace;font-size:12.5px;text-decoration:none;color:var(--paper);
+    background:var(--drawer);border:1px solid var(--rail);border-left:3px solid var(--brass);padding:10px 13px;}
+  nav.toc a:hover{background:var(--rail);border-left-color:var(--stamp);}
+  nav.toc span.n{color:var(--brass);margin-right:7px;}
+
+  section{margin-top:54px;}
+  .sec-head{display:flex;align-items:baseline;gap:14px;border-bottom:1px solid var(--rail);padding-bottom:12px;margin-bottom:20px;}
+  .sec-head .idx{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--brass);border:1px solid var(--brass);padding:3px 7px;border-radius:2px;flex-shrink:0;}
+  .sec-head h2{font-family:'Fraunces',serif;font-weight:600;font-size:23px;margin:0;}
+
+  p.body-text{color:#D9D2BB;font-size:14.8px;max-width:70ch;margin:0 0 16px;}
+  p.body-text strong{color:var(--paper);}
+  p.body-text code, li code{font-family:'IBM Plex Mono',monospace;background:var(--drawer);padding:1px 6px;border-radius:3px;color:var(--brass);font-size:.92em;}
+
+  ul.plain, ol.plain{color:#D9D2BB;font-size:14.8px;padding-left:20px;margin:0 0 16px;}
+  ul.plain li, ol.plain li{margin-bottom:8px;}
+  ul.plain li strong, ol.plain li strong{color:var(--paper);}
+
+  .file-card{
+    background:var(--paper);color:#231C10;
+    padding:20px 22px 18px;border-radius:1px;
+    box-shadow:0 10px 22px rgba(0,0,0,.3);
+    position:relative;margin-bottom:16px;overflow:hidden;
+  }
+  .file-card .hole{position:absolute;left:12px;width:8px;height:8px;border-radius:50%;background:var(--lacquer);box-shadow:inset 0 1px 2px rgba(0,0,0,.5);}
+  .file-card .hole.h1{top:16px;} .file-card .hole.h2{bottom:16px;}
+  .file-card-inner{padding-left:22px;}
+  .file-card .fname{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:14px;color:var(--stamp);margin-bottom:4px;}
+  .file-card .ftag{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:#7A7358;margin-bottom:10px;}
+  .file-card p{margin:0 0 8px;font-size:13.6px;line-height:1.55;}
+  .file-card ul{margin:0;padding-left:18px;font-size:13.4px;}
+  .file-card li{margin-bottom:5px;}
+
+  table.schema{width:100%;border-collapse:collapse;font-family:'IBM Plex Mono',monospace;font-size:12.8px;margin-bottom:10px;}
+  table.schema th{text-align:left;color:var(--brass);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--rail);}
+  table.schema td{padding:8px 10px;border-bottom:1px solid var(--rail);color:#D9D2BB;}
+  table.schema tr:last-child td{border-bottom:none;}
+
+  .step-row{display:grid;grid-template-columns:34px 1fr;gap:14px;margin-bottom:16px;}
+  .step-num{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--lacquer);background:var(--brass);
+    width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;}
+  .step-body{padding-top:3px;}
+  .step-body .title{font-family:'Fraunces',serif;font-weight:600;font-size:15.5px;margin-bottom:3px;color:var(--paper);}
+  .step-body p{margin:0;font-size:13.8px;color:#C9C1A8;}
+
+  .out-of-scope{
+    margin-top:56px;padding:22px 24px;background:var(--drawer);border-left:3px solid var(--stamp);
+  }
+  .out-of-scope h3{font-family:'Fraunces',serif;font-size:18px;margin:0 0 10px;}
+  .out-of-scope ul{margin:0;padding-left:20px;font-size:13.8px;color:#C9C1A8;}
+  .out-of-scope li{margin-bottom:6px;}
+
+  footer{max-width:900px;margin:60px auto 0;padding:20px 24px 0;border-top:1px solid var(--rail);
+    font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#8A8368;text-align:center;}
+
+  @media(max-width:600px){
+    header{padding:40px 18px 0;} main{padding:0 18px;}
+    .file-card{padding:16px 16px 14px;} .step-row{grid-template-columns:28px 1fr;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <p class="eyebrow">FileSeek · Phase 2 Addendum</p>
+  <h1>Change-Diff Tracking — Implementation Plan</h1>
+  <p class="lede">A build plan for the coding agent to add "what changed" summaries to the live file watcher — without requiring OS-level process tracking or full version history.</p>
+</header>
+
+<div class="assumption-banner">
+  <strong>Note to the coding agent:</strong> this plan is written without direct access to the current codebase. Method names, exact function signatures, and existing helper utilities below are proposed conventions, not confirmed facts — verify each against <code>src/modules/</code> before implementing, and adjust names to match whatever already exists in <code>config.py</code>, <code>utils.py</code>, and <code>index_store.py</code>.
+</div>
+
+<main>
+
+<nav class="toc">
+  <ol>
+    <li><a href="#s1"><span class="n">01</span>Objective & Scope</a></li>
+    <li><a href="#s2"><span class="n">02</span>New Files</a></li>
+    <li><a href="#s3"><span class="n">03</span>Existing Files Touched</a></li>
+    <li><a href="#s4"><span class="n">04</span>Data Model</a></li>
+    <li><a href="#s5"><span class="n">05</span>Build Sequence</a></li>
+    <li><a href="#s6"><span class="n">06</span>Edge Cases</a></li>
+    <li><a href="#s7"><span class="n">07</span>Verification</a></li>
+  </ol>
+</nav>
+
+<section id="s1">
+  <div class="sec-head"><span class="idx">01</span><h2>Objective & Scope</h2></div>
+  <p class="body-text"><strong>Goal:</strong> when the live watcher (Phase 2) detects that a file's content changed, store a short, structured summary of <em>what</em> changed — not just <em>that</em> it changed — so the UI can show something like "12 lines added, 3 removed" next to the existing "changed 3 hours ago" timestamp, with zero AI/LLM calls involved.</p>
+  <p class="body-text"><strong>Explicitly not in scope for this plan:</strong> identifying which application or process caused the change (that needs OS-level handle tracking and is a separate, much larger effort — see §Out of Scope), and full version history / rollback (that needs full snapshots, not just diffs).</p>
+</section>
+
+<section id="s2">
+  <div class="sec-head"><span class="idx">02</span><h2>New Files</h2></div>
+  <p class="body-text">These slot into the <code>watcher/</code> folder already scaffolded in the repo.</p>
+
+  <div class="file-card">
+    <span class="hole h1"></span><span class="hole h2"></span>
+    <div class="file-card-inner">
+      <div class="fname">src/modules/watcher/diff.py</div>
+      <div class="ftag">New module</div>
+      <p>Computes a lightweight diff summary between a file's previous and current state.</p>
+      <ul>
+        <li>For text-based files (code, json, md, csv, txt): line-level diff using Python's built-in <code>difflib</code> — no new dependency needed.</li>
+        <li>For binary/non-text files (images, media, archives): no line diff possible — fall back to size delta + modified-time only.</li>
+        <li>Output: a small dict, e.g. <code>{"lines_added": 12, "lines_removed": 3, "size_delta_bytes": 480, "summary": "12 lines added, 3 removed"}</code> — exact keys should match whatever convention <code>utils.py</code> already uses for other metadata dicts.</li>
+        <li>Must cap how much it reads/diffs for very large files (reuse whatever excerpt/size limit the embedder already applies, so this doesn't become the slow part of a sync pass).</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="file-card">
+    <span class="hole h1"></span><span class="hole h2"></span>
+    <div class="file-card-inner">
+      <div class="fname">src/modules/watcher/snapshot_store.py</div>
+      <div class="ftag">New module</div>
+      <p>Keeps just enough of the "before" state to diff against — not a full file history.</p>
+      <ul>
+        <li>Store a content hash (for change detection — did it actually change, or just get touched/resaved identically) plus, for text files only, the last known line count and a small trimmed copy (same size cap as above) for diffing.</li>
+        <li>For non-text files: hash + size only, no content copy.</li>
+        <li>Persist this next to the existing FAISS index/metadata files (same <code>data/</code> directory convention already used for <code>index.faiss</code> and metadata), not as a separate database, unless the agent finds a strong reason to split it.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="s3">
+  <div class="sec-head"><span class="idx">03</span><h2>Existing Files Touched</h2></div>
+
+  <div class="file-card">
+    <span class="hole h1"></span><span class="hole h2"></span>
+    <div class="file-card-inner">
+      <div class="fname">src/modules/watcher/sync.py</div>
+      <div class="ftag">Planned Phase 2 file — logic to add</div>
+      <p>Where the actual hook goes: whenever a modify event comes through the event queue, before overwriting the index entry, call <code>snapshot_store</code> to fetch the previous snapshot, run <code>diff.py</code> against the new content, then write the diff summary into that file's metadata entry alongside its existing fields (name, path, category, etc.) — reuse the existing <code>add_or_update</code>-style method on <code>IndexStore</code> if one exists, extending its record shape rather than adding a second write path.</p>
+    </div>
+  </div>
+
+  <div class="file-card">
+    <span class="hole h1"></span><span class="hole h2"></span>
+    <div class="file-card-inner">
+      <div class="fname">src/modules/core/utils.py</div>
+      <div class="ftag">Likely touched</div>
+      <p>If there's already a shared "record shape" helper or constant listing metadata fields (used by <code>crawler.py</code> and the verification suite), the new diff fields need to be added there too, so <code>verify_build.py</code>-style checks that assert "record has all fields" don't need separate maintenance later.</p>
+    </div>
+  </div>
+
+  <div class="file-card">
+    <span class="hole h1"></span><span class="hole h2"></span>
+    <div class="file-card-inner">
+      <div class="fname">Frontend — result card template / app.js</div>
+      <div class="ftag">UI change</div>
+      <p>Add a small line under the existing "modified X ago" text on each result card, showing the diff summary when present (e.g. "12 lines added, 3 removed"). Hide it entirely for files with no diff data yet (first index pass, or binary files) rather than showing an empty or misleading line.</p>
+    </div>
+  </div>
+</section>
+
+<section id="s4">
+  <div class="sec-head"><span class="idx">04</span><h2>Data Model — Proposed Metadata Addition</h2></div>
+  <p class="body-text">Per-file, in addition to existing fields (name, path, category, size, modified, sensitive, etc.):</p>
+  <table class="schema">
+    <tr><th>Field</th><th>Type</th><th>Notes</th></tr>
+    <tr><td>last_diff_summary</td><td>string or null</td><td>Human-readable line, e.g. "12 lines added, 3 removed". Null until the file has changed at least once after initial indexing.</td></tr>
+    <tr><td>last_diff_lines_added</td><td>int</td><td>0 for binary files.</td></tr>
+    <tr><td>last_diff_lines_removed</td><td>int</td><td>0 for binary files.</td></tr>
+    <tr><td>last_diff_size_delta</td><td>int (bytes, signed)</td><td>Always computable, even for binary files.</td></tr>
+    <tr><td>content_hash</td><td>string</td><td>Used internally by snapshot_store to detect real vs. no-op changes; not necessarily shown in UI.</td></tr>
+  </table>
+</section>
+
+<section id="s5">
+  <div class="sec-head"><span class="idx">05</span><h2>Build Sequence</h2></div>
+
+  <div class="step-row">
+    <div class="step-num">1</div>
+    <div class="step-body"><div class="title">Confirm existing conventions first</div>
+      <p>Before writing new code, the agent should read <code>config.py</code>, <code>utils.py</code>, and <code>index_store.py</code> to confirm the actual metadata record shape, the actual method names for adding/updating index entries, and whatever size/excerpt limits the embedder already enforces — reuse these rather than inventing parallel conventions.</p>
+    </div>
+  </div>
+  <div class="step-row">
+    <div class="step-num">2</div>
+    <div class="step-body"><div class="title">Build snapshot_store.py</div>
+      <p>Implement hash-based change detection first, in isolation, with its own small test — this is the foundation everything else depends on.</p>
+    </div>
+  </div>
+  <div class="step-row">
+    <div class="step-num">3</div>
+    <div class="step-body"><div class="title">Build diff.py</div>
+      <p>Implement the line-diff for text files and the size-delta fallback for binary files, tested against a few sample files independently of the watcher.</p>
+    </div>
+  </div>
+  <div class="step-row">
+    <div class="step-num">4</div>
+    <div class="step-body"><div class="title">Wire into sync.py</div>
+      <p>Only once 2 and 3 are independently verified, hook them into the actual modify-event handling path.</p>
+    </div>
+  </div>
+  <div class="step-row">
+    <div class="step-num">5</div>
+    <div class="step-body"><div class="title">Update the metadata schema + verification suite</div>
+      <p>Extend <code>verify_build.py</code>-style checks to assert the new fields exist and behave correctly (e.g. stay null until a real change happens).</p>
+    </div>
+  </div>
+  <div class="step-row">
+    <div class="step-num">6</div>
+    <div class="step-body"><div class="title">Surface it in the UI</div>
+      <p>Last step, once the data is reliably there — add the frontend line described in §3.</p>
+    </div>
+  </div>
+</section>
+
+<section id="s6">
+  <div class="sec-head"><span class="idx">06</span><h2>Edge Cases To Handle</h2></div>
+  <ul class="plain">
+    <li><strong>No-op saves:</strong> some apps rewrite a file with identical content on save (common with editors/IDEs). The content hash check must prevent these from generating a false "changed" diff.</li>
+    <li><strong>Rapid successive edits:</strong> if the event queue batches multiple modify events for the same file before sync runs, diff against the oldest available snapshot, not an intermediate one, so the summary reflects the real net change.</li>
+    <li><strong>First-time index vs. real change:</strong> a file appearing in the index for the first time should never get a diff summary — that's not a change, that's discovery.</li>
+    <li><strong>Very large text files:</strong> respect the same excerpt/size cap used elsewhere so diffing a huge log file doesn't stall the sync queue.</li>
+    <li><strong>Renamed vs. modified:</strong> a pure rename (same content, new path) should not produce a content diff — only a path-change note, if one exists elsewhere in the metadata already.</li>
+  </ul>
+</section>
+
+<section id="s7">
+  <div class="sec-head"><span class="idx">07</span><h2>Verification Checklist</h2></div>
+  <ul class="plain">
+    <li>Modify a text file → diff summary appears with correct added/removed line counts.</li>
+    <li>Re-save a text file with no actual content change → no new diff summary generated.</li>
+    <li>Modify a binary file (e.g. an image) → size-delta-only summary appears, no line counts.</li>
+    <li>Newly discovered file on first index → no diff summary present.</li>
+    <li>Rename a file without changing content → no diff summary triggered by the rename alone.</li>
+    <li>Large file (above the size cap) → diff still completes without noticeably slowing the sync queue.</li>
+  </ul>
+</section>
+
+<div class="out-of-scope">
+  <h3>Explicitly Out of Scope for This Plan</h3>
+  <ul>
+    <li><strong>Which app/process caused the change</strong> — requires OS-level file handle or process tracking (e.g. Windows ETW/Process Monitor-style hooks), needs elevated permissions, and is a separate, much larger effort. A cheap approximation (logging the foreground app when <code>watchdog</code> fires) could be a later stretch goal, not part of this build.</li>
+    <li><strong>Full version history / rollback</strong> — would require storing full file snapshots over time, which conflicts with keeping the index lightweight (~26MB currently for 13.5k files). Only worth revisiting if users explicitly ask for it on specific folders.</li>
+  </ul>
+</div>
+
+</main>
+
+<footer>FileSeek — Phase 2 Change-Diff Plan, for the coding agent</footer>
+
+</body>
+</html>

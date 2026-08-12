@@ -17,5 +17,5 @@ if not exist "venv\Scripts\python.exe" (
 
 echo [FileSeek] Starting FileSeek at http://127.0.0.1:7860
 start "" "http://127.0.0.1:7860"
-"venv\Scripts\python.exe" src\app.py
+"venv\Scripts\python.exe" -u src\app.py
 pause

@@ -16,6 +16,9 @@ const CAT_LABELS = {
 let currentIndexed = false;
 let debounceTimer = null;
 let statusTimer = null;
+let baseCounts = {};
+let lastSearchCounts = null;
+let lastSearchTotal = 0;
 
 function debounce(fn, ms) {
     return (...args) => {
@@ -42,6 +45,27 @@ function matchClass(percent) {
     return 'match-low';
 }
 
+function applyTabCounts() {
+    const searching = searchInput.value.trim().length > 0 && lastSearchCounts;
+    document.querySelectorAll('.tab-count').forEach(el => {
+        const cat = el.dataset.cat;
+        let n;
+        if (searching) {
+            n = cat === 'all'
+                ? Object.values(lastSearchCounts).reduce((a, b) => a + b, 0)
+                : (lastSearchCounts[cat] || 0);
+            el.textContent = n.toLocaleString();
+            el.classList.toggle('search-count', true);
+        } else {
+            n = cat === 'all'
+                ? Object.values(baseCounts).reduce((a, b) => a + b, 0)
+                : (baseCounts[cat] || 0);
+            el.textContent = n ? n.toLocaleString() : '';
+            el.classList.toggle('search-count', false);
+        }
+    });
+}
+
 function setPill(text, cls) {
     statusPill.textContent = text;
     statusPill.className = 'status-pill ' + cls;
@@ -63,6 +87,7 @@ function resultCard(r) {
         ? `<span class="match-badge ${matchClass(r.match_percent)}">${r.match_percent}%</span>`
         : '';
     const semanticInfo = r.semantic_percent != null ? ' · semantic ' + r.semantic_percent + '%' : '';
+    const diffLine = diffSummaryLine(r);
     return `
     <div class="result-card">
         <div class="result-icon">${r.icon}</div>
@@ -73,6 +98,7 @@ function resultCard(r) {
             </div>
             <div class="result-path" title="${escapeHtml(r.path)}">${escapeHtml(r.path)}</div>
             <div class="result-meta">${r.parent_folder ? escapeHtml(r.parent_folder) + ' · ' : ''}${r.size_display} · ${r.modified_display}${semanticInfo}</div>
+            ${diffLine}
         </div>
         <div class="result-actions">
             ${matchBadge}
@@ -80,6 +106,16 @@ function resultCard(r) {
             <button class="icon-btn" data-action="folder" data-path="${escapeHtml(r.path)}">Open Folder</button>
         </div>
     </div>`;
+}
+
+function diffSummaryLine(r) {
+    if (!r.last_diff_summary && !r.last_diff_size_delta) return '';
+    const parts = [];
+    if (r.last_diff_summary) parts.push(r.last_diff_summary);
+    if (r.last_diff_size_delta) {
+        parts.push((r.last_diff_size_delta > 0 ? '+' : '') + r.last_diff_size_delta.toLocaleString() + ' B');
+    }
+    return `<div class="result-diff" title="Last change summary">✏️ ${escapeHtml(parts.join(' · '))}</div>`;
 }
 
 async function browse(category) {
@@ -121,6 +157,9 @@ async function refreshStatus() {
             setPill('no index yet', 'loading');
             indexInfo.textContent = 'Index: empty';
         }
+        if (data.watching) {
+            setPill(statusPill.textContent + ' · watching live', 'ready');
+        }
         progressText.textContent = data.progress && data.indexing ? data.progress : '';
         reindexBtn.disabled = !!data.indexing;
         reindexBtn.textContent = data.indexing ? '⏳ Indexing…' : '🔄 Re-index';
@@ -128,10 +167,8 @@ async function refreshStatus() {
             indexInfo.textContent += ' · updated ' + timeAgo(data.last_indexed);
         }
         if (data.categories) {
-            document.querySelectorAll('.tab-count').forEach(el => {
-                const n = data.categories[el.dataset.cat];
-                el.textContent = n ? n.toLocaleString() : '';
-            });
+            baseCounts = data.categories;
+            applyTabCounts();
         }
         if (!wasIndexed && data.indexed && !searchInput.value.trim()) {
             browse(currentCategory);
@@ -146,20 +183,31 @@ function showEmptyState() {
     resultsEl.appendChild(emptyState);
 }
 
-function renderResults(results, query) {
+function renderResults(results, query, total, showAll) {
     if (!results || results.length === 0) {
         resultsEl.innerHTML = `
             <div class="empty-state">
                 <div class="empty-icon">🔍</div>
-                <h2>No matches for "${escapeHtml(query)}"</h2>
+                <h2>No matches for “${escapeHtml(query)}”</h2>
                 <p>Try different words or a broader concept.</p>
             </div>`;
         return;
     }
-    resultsEl.innerHTML = results.map(r => resultCard(r)).join('');
+    const shown = results.length;
+    const hasMore = total != null && total > shown;
+    const shownTotal = total != null ? total : shown;
+    const totalLine = hasMore
+        ? `${total.toLocaleString()} matches — showing top ${shown.toLocaleString()}`
+        : `${shownTotal.toLocaleString()} match${shownTotal === 1 ? '' : 'es'}`;
+    const showAllBtn = hasMore && !showAll
+        ? `<button class="show-all-btn" data-action="show-all" data-limit="${total}">Show all ${total.toLocaleString()}</button>`
+        : '';
+    resultsEl.innerHTML =
+        `<div class="browse-header">🔎 <strong>${escapeHtml(query)}</strong> — ${totalLine}${showAllBtn}</div>` +
+        results.map(r => resultCard(r)).join('');
 }
 
-async function runSearch() {
+async function runSearch(limit) {
     const query = searchInput.value.trim();
     if (!query) {
         browse(currentCategory);
@@ -174,14 +222,18 @@ async function runSearch() {
             </div>`;
         return;
     }
+    const showAll = limit != null;
     try {
         const res = await fetch('/api/search', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query, category: currentCategory })
+            body: JSON.stringify({ query, category: currentCategory, limit: limit || undefined })
         });
         const data = await res.json();
-        renderResults(data.results, query);
+        lastSearchCounts = data.category_counts || {};
+        lastSearchTotal = data.total != null ? data.total : data.results.length;
+        applyTabCounts();
+        renderResults(data.results, query, data.total, showAll);
     } catch (e) {
         toast('Search failed — is the server running?');
     }
@@ -192,6 +244,9 @@ const debouncedSearch = debounce(runSearch, 300);
 searchInput.addEventListener('input', () => {
     const q = searchInput.value.trim();
     if (!q) {
+        lastSearchCounts = null;
+        lastSearchTotal = 0;
+        applyTabCounts();
         browse(currentCategory);
         return;
     }
@@ -202,6 +257,10 @@ resultsEl.addEventListener('click', async (event) => {
     const btn = event.target.closest('[data-action]');
     if (!btn) return;
     const action = btn.dataset.action;
+    if (action === 'show-all') {
+        runSearch(parseInt(btn.dataset.limit, 10) || undefined);
+        return;
+    }
     const path = btn.dataset.path;
     const endpoint = action === 'file' ? '/api/open/file' : '/api/open/folder';
     try {

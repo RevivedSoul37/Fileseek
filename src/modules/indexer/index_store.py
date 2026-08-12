@@ -76,6 +76,25 @@ class IndexStore:
         ids = list(self.metadata.keys())
         return max(ids) + 1 if ids else 1
 
+    def get_record(self, key):
+        with self.lock:
+            existing_id = self.path_to_id.get(key)
+            if existing_id is None:
+                return None
+            record = self.metadata.get(existing_id)
+            return dict(record) if record is not None else None
+
+    def update_record(self, key, record):
+        """Metadata-only update - the FAISS vector is untouched (content edits
+        do not change the embedded name+folder+type text)."""
+        with self.lock:
+            existing_id = self.path_to_id.get(key)
+            if existing_id is None:
+                return False
+            self.metadata[existing_id] = record
+            self.last_indexed = time.time()
+            return True
+
     def search(self, query_embedding, k=20):
         with self.lock:
             if self.index is None or self.index.ntotal == 0:

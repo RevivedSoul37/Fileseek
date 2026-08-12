@@ -86,6 +86,10 @@ def record_to_result(record, match_percent=None, semantic_percent=None):
         "category": record.get("category", "other"),
         "icon": record.get("icon", "\U0001F4C1"),
         "sensitive": bool(record.get("sensitive")),
+        "last_diff_summary": record.get("last_diff_summary"),
+        "last_diff_lines_added": record.get("last_diff_lines_added"),
+        "last_diff_lines_removed": record.get("last_diff_lines_removed"),
+        "last_diff_size_delta": record.get("last_diff_size_delta"),
         "match_percent": match_percent,
         "semantic_percent": semantic_percent,
     }

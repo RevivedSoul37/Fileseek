@@ -1,4 +1,4 @@
-import sys
+﻿import sys
 import time
 from pathlib import Path
 
@@ -15,7 +15,7 @@ from modules.search.engine import SearchEngine
 
 def check(label, condition, detail=""):
     mark = "PASS" if condition else "FAIL"
-    print(f"[{mark}] {label}" + (f" — {detail}" if detail else ""))
+    print(f"[{mark}] {label}" + (f" \u2014 {detail}" if detail else ""))
     if not condition:
         sys.exit(1)
 
@@ -76,7 +76,7 @@ test_queries = [
 ]
 for q, _ in test_queries:
     t0 = time.time()
-    results = engine.search(q, max_results=5)
+    results, _ = engine.search(q, max_results=5)
     dt = (time.time() - t0) * 1000
     top = results[0]["name"] if results else "(none)"
     pct = results[0]["match_percent"] if results else 0
@@ -90,14 +90,55 @@ fake_vec = embedder.embed_query("testfile xyz")
 before = store2.index.ntotal
 store2.add_or_update(fake_key, fake_record, fake_vec)
 check("add file increments index", store2.index.ntotal == before + 1, f"{before} -> {store2.index.ntotal}")
-res = engine.search("testfile_xyz", max_results=3)
+res, _ = engine.search("testfile_xyz", max_results=3)
 check("newly added file is findable", len(res) > 0 and res[0]["name"] == "testfile_xyz.txt", res[0]["name"] if res else "not found")
 store2.remove(fake_key)
 check("remove file decrements index", store2.index.ntotal == before, f"{store2.index.ntotal} == {before}")
 
 print("\n-- Category filter test --")
-res_docs = engine.search("resume", max_results=10, category="document")
+res_docs, _ = engine.search("resume", max_results=10, category="document")
 check("category=document returns only documents", all(r["category"]=="document" for r in res_docs), f"{len(res_docs)} results")
+
+print("\n-- Watcher: snapshot store + diff --")
+import tempfile
+from modules.watcher.snapshot_store import SnapshotStore, norm_key
+from modules.watcher.diff import summarize_diff, size_only_fields
+from modules.watcher.sync import Sync
+from modules.search.ranker import record_to_result
+
+tmp_dir = tempfile.mkdtemp(prefix="fileseek_watcher_test_")
+test_file = Path(tmp_dir) / "note.txt"
+test_file.write_bytes(b"line one\nline two\n")
+
+snap = SnapshotStore(path=Path(tmp_dir) / "snaps.json")
+s1 = snap.snapshot_file(str(test_file))
+check("snapshot returns hash+text", s1 is not None and s1["text"] == "line one\nline two\n", repr(s1.get("text"))[:60])
+snap.put(str(test_file), s1)
+check("snapshot store get round-trips", snap.get(str(test_file))["hash"] == s1["hash"])
+
+test_file.write_bytes(b"line one\nline two CHANGED\nline three\n")
+s2 = snap.snapshot_file(str(test_file))
+diff_fields = summarize_diff(s1, s2)
+check("diff counts added lines", diff_fields["last_diff_lines_added"] == 2, str(diff_fields))
+check("diff counts removed lines", diff_fields["last_diff_lines_removed"] == 1, str(diff_fields))
+check("diff summary is readable", diff_fields["last_diff_summary"] == "2 lines added \u00b7 1 line removed", diff_fields["last_diff_summary"])
+check("binary fallback has no lines", size_only_fields(100, 140)["last_diff_lines_added"] == 0)
+
+print("\n-- Watcher: sync applies diff to index --")
+sync_store = IndexStore()
+sync_store.build({fake_key: fake_record}, embedder.embed_query("testfile xyz").reshape(1, -1))
+sync = Sync(sync_store, embedder, snap)
+check("update_record exists for metadata-only changes", sync_store.update_record(fake_key, {**fake_record, "sensitive": True}))
+check("modified event produces diff record", sync.handle_batch([{"type": "modified", "path": str(test_file)}]) == 1)
+rec = sync_store.get_record(norm_key(str(test_file)))
+check("diff fields written into record", rec is not None and rec.get("last_diff_summary") == "2 lines added \u00b7 1 line removed", str(rec.get("last_diff_summary")) if rec else None)
+
+print("\n-- record_to_result exposes diff fields --")
+result = record_to_result(rec)
+check("API result carries last_diff_summary", result.get("last_diff_summary") == "2 lines added \u00b7 1 line removed")
+
+import shutil
+shutil.rmtree(tmp_dir, ignore_errors=True)
 
 print("\n=== ALL CHECKS PASSED ===")
 stats = store2.stats()

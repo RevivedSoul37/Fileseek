@@ -24,6 +24,28 @@ def _marks_sensitive(name):
     return any(marker in lowered for marker in SENSITIVE_NAME_MARKERS)
 
 
+def build_record(full_path):
+    try:
+        stat = os.stat(full_path)
+        size = stat.st_size
+        modified = stat.st_mtime
+    except (OSError, PermissionError):
+        return None
+    filename = os.path.basename(full_path)
+    extension = os.path.splitext(filename)[1].lower()
+    return {
+        "name": filename,
+        "path": full_path,
+        "parent_folder": Path(os.path.dirname(full_path)).name,
+        "extension": extension,
+        "size": size,
+        "modified": modified,
+        "category": get_file_category(extension),
+        "icon": get_file_icon(extension),
+        "sensitive": _marks_sensitive(filename),
+    }
+
+
 def walk_files(root_dirs=None):
     found = {}
     roots = root_dirs or SCAN_DIRS
@@ -38,23 +60,8 @@ def walk_files(root_dirs=None):
                 continue
             for filename in filenames:
                 full_path = os.path.join(dirpath, filename)
-                try:
-                    stat = os.stat(full_path)
-                    size = stat.st_size
-                    modified = stat.st_mtime
-                except (OSError, PermissionError):
+                record = build_record(full_path)
+                if record is None:
                     continue
-                extension = os.path.splitext(filename)[1].lower()
-                record = {
-                    "name": filename,
-                    "path": full_path,
-                    "parent_folder": Path(dirpath).name,
-                    "extension": extension,
-                    "size": size,
-                    "modified": modified,
-                    "category": get_file_category(extension),
-                    "icon": get_file_icon(extension),
-                    "sensitive": _marks_sensitive(filename),
-                }
                 found[full_path.lower()] = record
     return found

@@ -1,9 +1,12 @@
-﻿import os
+﻿import logging
+import os
 import subprocess
 import sys
 import threading
 import time
 from pathlib import Path
+
+import numpy as np
 
 from flask import Flask, jsonify, render_template, request
 
@@ -15,12 +18,24 @@ from modules.indexer.crawler import walk_files
 from modules.indexer.embedder import Embedder
 from modules.indexer.index_store import IndexStore
 from modules.search.engine import SearchEngine
+from modules.watcher.monitor import WatcherService
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-7s %(message)s",
+    datefmt="%H:%M:%S",
+)
+log = logging.getLogger("fileseek")
+for noisy in ("httpx", "httpcore", "huggingface_hub", "sentence_transformers", "urllib3"):
+    logging.getLogger(noisy).setLevel(logging.WARNING)
 
 app = Flask(__name__)
 
 store = IndexStore()
 embedder = Embedder(config.EMBED_MODEL_NAME)
 engine = SearchEngine(store, embedder)
+
+watcher = WatcherService(store, embedder)
 
 index_state = {"running": False, "progress": "", "files": 0}
 index_lock = threading.Lock()
@@ -43,22 +58,39 @@ def _run_full_index():
         if index_state["running"]:
             return
         index_state["running"] = True
+    started = time.perf_counter()
     try:
+        log.info("Index run started - scanning %d folders", len(config.SCAN_DIRS))
         index_state["progress"] = "Scanning folders..."
+        scan_started = time.perf_counter()
         records = walk_files(config.SCAN_DIRS)
         total = len(records)
         index_state["files"] = total
+        log.info("Scan complete: %d files in %.1fs", total, time.perf_counter() - scan_started)
+        log.info("Embedding model: %s", config.EMBED_MODEL_NAME)
         index_state["progress"] = f"Scanned {total} files. Loading AI model..."
         texts = [embedder.build_text(r) for r in records.values()]
-        index_state["progress"] = f"Embedding {total} files..."
-        embeddings = embedder.embed_texts(
-            texts, batch_size=config.EMBED_BATCH_SIZE, show_progress=False
-        )
+        chunks = []
+        step = 1000
+        for i in range(0, total, step):
+            chunk = texts[i:i + step]
+            chunks.append(embedder.embed_texts(
+                chunk, batch_size=config.EMBED_BATCH_SIZE, show_progress=False
+            ))
+            done = min(i + step, total)
+            log.info("Embedding %d/%d (%.0f%%)", done, total, done * 100.0 / max(total, 1))
+            index_state["progress"] = f"Embedding {done}/{total}..."
+        embeddings = np.concatenate(chunks) if chunks else np.zeros((0, 384), dtype="float32")
+        log.info("Building FAISS index over %d vectors...", total)
         index_state["progress"] = "Building FAISS index..."
         store.build(records, embeddings)
         store.save()
+        log.info("Index saved: %d vectors -> %s", store.index.ntotal, config.INDEX_PATH)
         index_state["progress"] = f"Indexed {total} files at {time.strftime('%H:%M:%S')}"
+        log.info("Index run complete: %d files in %.1fs", total, time.perf_counter() - started)
+        _start_watcher_if_ready()
     except Exception as exc:
+        log.exception("Index run failed: %s", exc)
         index_state["progress"] = f"Index failed: {exc}"
     finally:
         index_state["running"] = False
@@ -74,11 +106,13 @@ def api_search():
     payload = request.get_json(silent=True) or {}
     query = payload.get("query", "")
     category = payload.get("category", "all")
-    limit = payload.get("limit") or config.MAX_RESULTS
+    limit = min(int(payload.get("limit") or config.MAX_RESULTS), 1000)
     if not store.is_ready():
-        return jsonify({"results": [], "indexed": False, "query": query})
-    results = engine.search(query, max_results=limit, category=category)
-    return jsonify({"results": results, "indexed": True, "query": query})
+        return jsonify({"results": [], "indexed": False, "query": query,
+                        "total": 0, "category_counts": {}})
+    results, counts = engine.search(query, max_results=limit, category=category)
+    return jsonify({"results": results, "indexed": True, "query": query,
+                    "total": counts["total"], "category_counts": counts["categories"]})
 
 
 @app.route("/api/browse", methods=["GET"])
@@ -103,6 +137,7 @@ def api_index():
     with index_lock:
         if index_state["running"]:
             return jsonify({"started": False, "reason": "already running"})
+    log.info("Re-index requested via API")
     thread = threading.Thread(target=_run_full_index, daemon=True)
     thread.start()
     return jsonify({"started": True})
@@ -119,6 +154,8 @@ def api_status():
         "categories": stats["categories"],
         "indexing": index_state["running"],
         "progress": index_state["progress"],
+        "watching": watcher.running,
+        "snapshot_count": len(watcher.snapshots.snapshots),
     })
 
 
@@ -159,16 +196,44 @@ def api_config():
     })
 
 
+def _start_watcher_if_ready():
+    if watcher.running or not store.is_ready():
+        return
+    watcher.seed_snapshots()
+    if watcher.start():
+        index_state["progress"] = f"Watcher live ({len(watcher.snapshots.snapshots)} snapshots)"
+    else:
+        log.warning("Watcher failed to start")
+
+
 def _auto_load_or_build():
     loaded = store.load()
     if loaded:
+        log.info("Loaded existing index: %d files from %s", len(store.metadata), config.INDEX_PATH)
         index_state["progress"] = f"Loaded existing index ({len(store.metadata)} files)"
+        _start_watcher_if_ready()
         return
+    log.info("No saved index found - building first index")
     thread = threading.Thread(target=_run_full_index, daemon=True)
     thread.start()
 
 
+def _port_busy():
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.5)
+        return s.connect_ex((config.HOST, config.PORT)) == 0
+
+
 if __name__ == "__main__":
-    print(f"FileSeek starting on http://{config.HOST}:{config.PORT}")
+    if _port_busy():
+        log.error(
+            "Port %d is already in use - another FileSeek (or any app) is running. "
+            "Close that console window first, then relaunch.",
+            config.PORT,
+        )
+        input("Press Enter to close this window...")
+        raise SystemExit(1)
+    log.info("FileSeek starting on http://%s:%d", config.HOST, config.PORT)
     _auto_load_or_build()
     app.run(host=config.HOST, port=config.PORT, debug=False)
