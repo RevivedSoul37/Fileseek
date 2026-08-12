@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FileSeek — Field Test Protocol</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗂️</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650;9..144,800&family=Karla:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+    --lacquer: #0E1915;
+    --drawer: #15221C;
+    --rail: #263B2F;
+    --paper: #F3ECD9;
+    --brass: #C9A227;
+    --stamp: #B3402E;
+    --brass-dim: #9c7d26;
+    --ink: #262016;
+    --ink-faint: #6b5f4a;
+    --chalk: #A9BFAF;
+    --chalk-faint: #62796c;
+    --paper-rule: rgba(179,64,46,.5);
+    --font-display: "Fraunces", Georgia, serif;
+    --font-body: "Karla", "Segoe UI", sans-serif;
+    --font-mono: "IBM Plex Mono", Consolas, monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { background: var(--lacquer); }
+body {
+    background: radial-gradient(1400px 700px at 50% -10%, rgba(201,162,39,.06), transparent 60%), var(--lacquer);
+    color: var(--chalk);
+    font-family: var(--font-body);
+    padding: 48px 20px 90px;
+}
+
+/* ── cover plate ── */
+.cover {
+    max-width: 880px; margin: 0 auto 34px;
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 24px;
+}
+.cover-left .eyebrow {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--brass-dim); margin-bottom: 10px;
+}
+.cover-left h1 {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(34px, 6vw, 56px); line-height: 1.02;
+    color: var(--paper); letter-spacing: -0.5px;
+}
+.cover-left h1 em { font-style: italic; color: var(--brass); font-weight: 650; }
+.cover-left .lede {
+    margin-top: 14px; max-width: 560px;
+    font-size: 15px; line-height: 1.65; color: var(--chalk);
+}
+.cover-right { text-align: right; flex-shrink: 0; }
+.tally-plate {
+    border: 1px solid var(--rail); background: var(--drawer);
+    border-radius: 6px; padding: 14px 18px; min-width: 190px;
+}
+.tally-num {
+    font-family: var(--font-display); font-weight: 800; font-size: 40px;
+    color: var(--paper); line-height: 1;
+}
+.tally-num .of { font-size: 16px; color: var(--chalk-faint); font-weight: 500; }
+.tally-label {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--brass-dim); margin-top: 6px;
+}
+.hint {
+    margin-top: 10px; font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--chalk-faint);
+}
+
+/* ── the paper sheet ── */
+.sheet {
+    max-width: 880px; margin: 0 auto;
+    background: var(--paper); color: var(--ink);
+    border-radius: 8px;
+    box-shadow: 0 24px 70px rgba(0,0,0,.55);
+    padding: 46px 54px 60px;
+    position: relative;
+}
+.sheet::before {
+    content: ""; position: absolute; left: 26px; top: 40px; bottom: 40px;
+    width: 6px; border-radius: 3px;
+    background: repeating-linear-gradient(to bottom, var(--lacquer) 0 7px, transparent 7px 26px);
+    opacity: .12;
+}
+
+.tier { margin-bottom: 44px; scroll-margin-top: 20px; }
+.tier:last-child { margin-bottom: 0; }
+.tier-head {
+    display: flex; align-items: baseline; gap: 14px;
+    border-bottom: 2px solid var(--paper-rule);
+    padding-bottom: 8px; margin-bottom: 16px;
+}
+.tier-no {
+    font-family: var(--font-mono); font-weight: 600; font-size: 12px;
+    color: var(--stamp); letter-spacing: .08em;
+}
+.tier-head h2 {
+    font-family: var(--font-display); font-weight: 650; font-size: 22px; color: var(--ink);
+}
+.tier-head .tier-note {
+    margin-left: auto; font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--ink-faint); letter-spacing: .04em;
+}
+.tier p.intro { font-size: 14px; line-height: 1.6; color: var(--ink-faint); margin-bottom: 14px; max-width: 640px; }
+
+/* check rows — click to stamp */
+.check {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 9px 10px 9px 6px;
+    border-bottom: 1px dashed rgba(38,32,22,.22);
+    cursor: pointer; position: relative;
+    transition: background .15s;
+    border-radius: 4px;
+}
+.check:hover { background: rgba(38,32,22,.045); }
+.check:focus-visible, .qtable tr:focus-visible { outline: 2px solid var(--stamp); outline-offset: 2px; }
+.box {
+    flex-shrink: 0; width: 16px; height: 16px; margin-top: 2px;
+    border: 1.5px solid var(--ink-faint); border-radius: 3px;
+    transition: border-color .15s;
+}
+.check:hover .box { border-color: var(--stamp); }
+.check .txt { font-size: 14px; line-height: 1.5; }
+.check .txt code {
+    font-family: var(--font-mono); font-size: 12.5px;
+    background: rgba(38,32,22,.07); padding: 1px 5px; border-radius: 3px;
+}
+.check .txt .why { display: block; font-size: 12px; color: var(--ink-faint); margin-top: 2px; }
+
+/* THE stamp on a passed row */
+.check .passed {
+    position: absolute; right: 12px; top: 50%;
+    transform: translateY(-50%) rotate(-4deg);
+    font-family: var(--font-mono); font-weight: 600; font-size: 11px;
+    letter-spacing: .06em; color: var(--stamp);
+    border: 2px solid var(--stamp); border-radius: 3px;
+    padding: 3px 9px; background: rgba(179,64,46,.06);
+    opacity: 0; pointer-events: none;
+}
+.check.stamped .passed {
+    opacity: 1;
+    animation: stamp-down .3s cubic-bezier(.2,1.4,.4,1);
+}
+.check.stamped .box { border-color: var(--stamp); background: var(--stamp); box-shadow: inset 0 0 0 3px var(--paper); }
+.check.stamped .txt { color: var(--ink-faint); }
+@keyframes stamp-down {
+    from { opacity: 0; transform: translateY(-50%) rotate(-4deg) scale(1.7); }
+    to   { opacity: 1; transform: translateY(-50%) rotate(-4deg) scale(1); }
+}
+
+/* query tables */
+.qtable { width: 100%; border-collapse: collapse; margin-top: 4px; }
+.qtable th {
+    text-align: left; font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint);
+    padding: 0 10px 7px 6px; border-bottom: 2px solid var(--paper-rule);
+}
+.qtable td {
+    padding: 9px 10px 9px 6px; vertical-align: top;
+    border-bottom: 1px dashed rgba(38,32,22,.22);
+    font-size: 13.5px; line-height: 1.5;
+}
+.qtable td.q { font-family: var(--font-mono); font-size: 12.5px; color: var(--ink); white-space: nowrap; }
+.qtable td.q::before { content: "“"; color: var(--stamp); }
+.qtable td.q::after { content: "”"; color: var(--stamp); }
+.qtable td.exp code {
+    font-family: var(--font-mono); font-size: 12px;
+    background: rgba(38,32,22,.07); padding: 1px 5px; border-radius: 3px;
+}
+.qtable tr { cursor: pointer; border-radius: 4px; position: relative; }
+.qtable tr:hover td { background: rgba(38,32,22,.045); }
+.qtable tr.stamped td.exp::after {
+    content: " PASSED"; font-family: var(--font-mono); font-weight: 600; font-size: 10px;
+    color: var(--stamp); border: 1.5px solid var(--stamp); border-radius: 3px;
+    padding: 1px 6px; margin-left: 8px; letter-spacing: .05em;
+    display: inline-block; transform: rotate(-3deg);
+    animation: stamp-inline .3s cubic-bezier(.2,1.4,.4,1);
+}
+@keyframes stamp-inline {
+    from { opacity: 0; transform: rotate(-3deg) scale(1.6); }
+    to   { opacity: 1; transform: rotate(-3deg) scale(1); }
+}
+.qtable td.stampcell { width: 34px; }
+.qtable td.stampcell .box { display: inline-block; }
+
+/* cleanup + limits blocks */
+.note-block {
+    border: 1.5px solid rgba(38,32,22,.3); border-radius: 6px;
+    padding: 14px 18px; margin-top: 12px;
+    background: rgba(38,32,22,.03);
+}
+.note-block h3 {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--stamp); margin-bottom: 8px;
+}
+.note-block ul { list-style: none; }
+.note-block li { font-size: 13.5px; line-height: 1.7; color: var(--ink); }
+.note-block li::before { content: "— "; color: var(--ink-faint); }
+.note-block li code {
+    font-family: var(--font-mono); font-size: 12px;
+    background: rgba(38,32,22,.07); padding: 1px 5px; border-radius: 3px;
+}
+
+/* footer colophon */
+.colophon {
+    max-width: 880px; margin: 26px auto 0;
+    display: flex; justify-content: space-between; gap: 16px;
+    font-family: var(--font-mono); font-size: 10.5px; color: var(--chalk-faint);
+    letter-spacing: .04em;
+}
+
+/* reveal on scroll */
+.tier { opacity: 0; transform: translateY(14px); transition: opacity .5s ease, transform .5s ease; }
+.tier.in { opacity: 1; transform: none; }
+
+@media (max-width: 760px) {
+    .sheet { padding: 30px 22px 40px; }
+    .sheet::before { display: none; }
+    .cover { flex-direction: column; align-items: flex-start; }
+    .cover-right { text-align: left; }
+    .qtable td.q { white-space: normal; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .tier { opacity: 1; transform: none; transition: none; }
+    .check.stamped .passed, .qtable tr.stamped td.exp::after { animation: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="cover">
+    <div class="cover-left">
+        <div class="eyebrow">FileSeek · verification ledger · aug 2026</div>
+        <h1>Field test<br><em>protocol</em></h1>
+        <p class="lede">Built from your actual index — 13,461 files across Desktop, Documents and Downloads. Every expected answer below is a real file on this computer, so each check proves the catalog is telling the truth.</p>
+    </div>
+    <div class="cover-right">
+        <div class="tally-plate">
+            <div class="tally-num"><span id="stamped-count">0</span><span class="of"> / <span id="total-count">0</span></span></div>
+            <div class="tally-label">checks stamped passed</div>
+        </div>
+        <div class="hint">click any row to stamp it.<br>stamps persist on this machine.</div>
+    </div>
+</header>
+
+<main class="sheet">
+
+    <section class="tier" id="t0">
+        <div class="tier-head"><span class="tier-no">TIER 0</span><h2>Browse the drawers</h2><span class="tier-note">no typing</span></div>
+        <p class="intro">The catalog opens full — newest files first. The tabs are drawers; pull one and the room refiles itself.</p>
+        <div class="check" data-id="t0a"><span class="box"></span><span class="txt">Page loads showing your newest files under “Browsing everything”<span class="why">top cards should be mermaid-diagram.svg and the FileSeek planning docs</span></span><span class="passed">PASSED</span></div>
+        <div class="check" data-id="t0b"><span class="box"></span><span class="txt">Open <code>Film &amp; sound</code> — 254 files<span class="why">expect freesound MP3s like universfield-yeah-boy-114748.mp3</span></span><span class="passed">PASSED</span></div>
+        <div class="check" data-id="t0c"><span class="box"></span><span class="txt">Open <code>Bundles</code> — 45 files<span class="why">biggest should be ComfyUI_windows_portable_nvidia.7z (1,995 MB)</span></span><span class="passed">PASSED</span></div>
+        <div class="check" data-id="t0d"><span class="box"></span><span class="txt">Open <code>Data</code> — about 5,617 files, your largest drawer<span class="why">mostly numeric-named JSON datasets</span></span><span class="passed">PASSED</span></div>
+        <div class="check" data-id="t0e"><span class="box"></span><span class="txt">Clear the search box — the browse view returns</span><span class="passed">PASSED</span></div>
+    </section>
+
+    <section class="tier" id="t1">
+        <div class="tier-head"><span class="tier-no">TIER 1</span><h2>Exact name recall</h2><span class="tier-note">the catalog never loses a card</span></div>
+        <table class="qtable">
+            <thead><tr><th>Type this</th><th>Expected top card</th><th class="stampcell"></th></tr></thead>
+            <tbody>
+                <tr data-id="t1a"><td class="q">Resume.pdf</td><td class="exp"><code>Resume.pdf</code> in Downloads\04-Documents, 85%+ match</td><td class="stampcell"><span class="box"></span></td></tr>
+                <tr data-id="t1b"><td class="q">implementation_plan.md</td><td class="exp">the planning doc in Desktop\FileSeek</td><td class="stampcell"><span class="box"></span></td></tr>
+                <tr data-id="t1c"><td class="q">ORGANIZE_LOG.txt</td><td class="exp">the Downloads cleanup log</td><td class="stampcell"><span class="box"></span></td></tr>
+                <tr data-id="t1d"><td class="q">ChatGPT Installer.exe</td><td class="exp">the installer in Downloads</td><td class="stampcell"><span class="box"></span></td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="tier" id="t2">
+        <div class="tier-head"><span class="tier-no">TIER 2</span><h2>Semantic search</h2><span class="tier-note">words that never appear in the filename</span></div>
+        <p class="intro">The interesting tier. These queries share no words with their targets — only meaning.</p>
+        <table class="qtable">
+            <thead><tr><th>Type this</th><th>Should surface</th><th class="stampcell"></th></tr></thead>
+            <tbody>
+                <tr data-id="t2a"><td class="q">job application cv</td><td class="exp"><code>Resume.pdf</code> — “job application” sits next to “resume” in meaning-space</td><td class="stampcell"><span class="box"></span></td></tr>
+                <tr data-id="t2b"><td class="q">3d modeling sculpture</td><td class="exp"><code>blender-5.1.2-windows-x64.msi</code> — Blender is the 3D tool; its name says nothing</td><td class="stampcell"><span class="box"></span></td></tr>
+                <tr data-id="t2c"><td class="q">ai image generation models</td><td class="exp"><code>ComfyUI…7z</code> and <code>ZIT loras.zip</code> — the image-gen ecosystem</td><td class="stampcell"><span class="box"></span></td></tr>
+                <tr data-id="t2d"><td class="q">voice dictation speech to text</td><td class="exp"><code>Wispr Flow Setup-v1.6.7.exe</code> — a dictation app</td><td class="stampcell"><span class="box"></span></td></tr>
+                <tr data-id="t2e"><td class="q">container virtualization</td><td class="exp"><code>Docker Desktop Installer.exe</code></td><td class="stampcell"><span class="box"></span></td></tr>
+                <tr data-id="t2f"><td class="q">cricket data</td><td class="exp"><code>Fetching Cricket Player Data.md</code> — a straight concept hit</td><td class="stampcell"><span class="box"></span></td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="tier" id="t3">
+        <div class="tier-head"><span class="tier-no">TIER 3</span><h2>Find what you forgot</h2><span class="tier-note">the point of the whole tool</span></div>
+        <table class="qtable">
+            <thead><tr><th>Type this</th><th>Should resurface</th><th class="stampcell"></th></tr></thead>
+            <tbody>
+                <tr data-id="t3a"><td class="q">screen recording</td><td class="exp"><code>Desktop 2026.08.09 - 13.18.08.01.mp4</code> — the 220 MB recording</td><td class="stampcell"><span class="box"></span></td></tr>
+                <tr data-id="t3b"><td class="q">game design</td><td class="exp"><code>Aether_Bound_Game_Design_v2.docx</code></td><td class="stampcell"><span class="box"></span></td></tr>
+                <tr data-id="t3c"><td class="q">sun space nasa</td><td class="exp"><code>sun-sdo-active-304.jpg</code> — a Solar Dynamics Observatory image</td><td class="stampcell"><span class="box"></span></td></tr>
+                <tr data-id="t3d"><td class="q">agent memory</td><td class="exp">the CreativeOS agent-memory docs</td><td class="stampcell"><span class="box"></span></td></tr>
+                <tr data-id="t3e"><td class="q">story bible worldbuilding</td><td class="exp">whatever lore files you have accumulated</td><td class="stampcell"><span class="box"></span></td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="tier" id="t4">
+        <div class="tier-head"><span class="tier-no">TIER 4</span><h2>Sensitive file audit</h2><span class="tier-note">34 flagged in the index</span></div>
+        <p class="intro">The catalog marks files whose names look like secrets with a red stamp of their own. Confirm the marks land, then decide if any are real secrets worth moving.</p>
+        <div class="check" data-id="t4a"><span class="box"></span><span class="txt">Search <code>token</code> — <code>session-tokens.ts</code>, <code>token-registry.ts</code> carry the sensitive mark</span><span class="passed">PASSED</span></div>
+        <div class="check" data-id="t4b"><span class="box"></span><span class="txt">Search <code>password</code> — <code>password.go</code> is marked</span><span class="passed">PASSED</span></div>
+        <div class="check" data-id="t4c"><span class="box"></span><span class="txt">Decide: are any of these real secrets, not just code about tokens?<span class="why">if yes, move them out of the indexed folders or rename them</span></span><span class="passed">PASSED</span></div>
+    </section>
+
+    <section class="tier" id="t5">
+        <div class="tier-head"><span class="tier-no">TIER 5</span><h2>Actions &amp; edges</h2><span class="tier-note">the catalog under pressure</span></div>
+        <div class="check" data-id="t5a"><span class="box"></span><span class="txt"><code>Open File</code> on Resume.pdf — opens in your PDF viewer</span><span class="passed">PASSED</span></div>
+        <div class="check" data-id="t5b"><span class="box"></span><span class="txt"><code>Open Folder</code> on any card — Explorer opens with the file highlighted</span><span class="passed">PASSED</span></div>
+        <div class="check" data-id="t5c"><span class="box"></span><span class="txt">Search <code>zzzzqqqq</code> — a calm “no matches” card, not a crash</span><span class="passed">PASSED</span></div>
+        <div class="check" data-id="t5d"><span class="box"></span><span class="txt">Type one letter — debounced, no lag, no flicker</span><span class="passed">PASSED</span></div>
+        <div class="check" data-id="t5e"><span class="box"></span><span class="txt"><code>Ctrl K</code> anywhere — the cursor jumps to the search slot</span><span class="passed">PASSED</span></div>
+        <div class="check" data-id="t5f"><span class="box"></span><span class="txt"><code>Refile everything</code> — live progress in the ledger bar; search keeps working meanwhile</span><span class="passed">PASSED</span></div>
+    </section>
+
+    <section class="tier" id="t6">
+        <div class="tier-head"><span class="tier-no">TIER 6</span><h2>Scale</h2><span class="tier-note">13,461 cards</span></div>
+        <div class="check" data-id="t6a"><span class="box"></span><span class="txt">The plate reads <code>13,462 files indexed</code> (or your current count)</span><span class="passed">PASSED</span></div>
+        <div class="check" data-id="t6b"><span class="box"></span><span class="txt">Any search answers in under 50 ms — check DevTools → Network timing</span><span class="passed">PASSED</span></div>
+    </section>
+
+    <section class="tier" id="t7">
+        <div class="tier-head"><span class="tier-no">ANNEX A</span><h2>Cleanup discoveries</h2><span class="tier-note">worth acting on</span></div>
+        <div class="note-block">
+            <h3>Space you could reclaim</h3>
+            <ul>
+                <li>~700 MB duplicate installers: <code>Wispr Flow Setup-v1.6.7.exe</code> + <code>v1.5.1095</code></li>
+                <li><code>ComfyUI_windows_portable_nvidia.7z</code> (2 GB) and <code>ZIT loras.zip</code> (1.6 GB) — keep only if not yet unpacked</li>
+                <li><code>Docker Desktop Installer.exe</code> (602 MB) — one-time installer, safe to delete post-install</li>
+            </ul>
+        </div>
+    </section>
+
+    <section class="tier" id="t8">
+        <div class="tier-head"><span class="tier-no">ANNEX B</span><h2>Known limits</h2><span class="tier-note">phase 1 scope</span></div>
+        <div class="note-block">
+            <h3>By design, for now</h3>
+            <ul>
+                <li>No live refresh — new files appear after <code>Refile everything</code> (the Phase 2 watcher fixes this)</li>
+                <li>Browse shows the 60 newest per drawer; search reaches everything</li>
+                <li>Numeric-named JSON datasets carry little meaning in their names, so semantic hits on them are weaker by nature</li>
+            </ul>
+        </div>
+    </section>
+
+</main>
+
+<footer class="colophon">
+    <span>fileseek · field test protocol</span>
+    <span>set in fraunces · karla · ibm plex mono</span>
+</footer>
+
+<script>
+const KEY = 'fileseek-test-stamps';
+let stamps = new Set();
+try { stamps = new Set(JSON.parse(localStorage.getItem(KEY) || '[]')); } catch (e) {}
+
+const rows = document.querySelectorAll('.check[data-id], tr[data-id]');
+document.getElementById('total-count').textContent = rows.length;
+
+function updateTally() {
+    document.getElementById('stamped-count').textContent =
+        [...stamps].filter(id => document.querySelector('[data-id="' + id + '"]')).length;
+}
+
+rows.forEach(row => {
+    const id = row.dataset.id;
+    if (stamps.has(id)) row.classList.add('stamped');
+    row.setAttribute('tabindex', '0');
+    row.setAttribute('role', 'button');
+    row.setAttribute('aria-pressed', row.classList.contains('stamped'));
+    const toggle = () => {
+        row.classList.toggle('stamped');
+        const on = row.classList.contains('stamped');
+        row.setAttribute('aria-pressed', on);
+        if (on) stamps.add(id); else stamps.delete(id);
+        localStorage.setItem(KEY, JSON.stringify([...stamps]));
+        updateTally();
+    };
+    row.addEventListener('click', toggle);
+    row.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
+});
+updateTally();
+
+const io = new IntersectionObserver(entries => {
+    entries.forEach(en => { if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); } });
+}, { threshold: 0.08 });
+document.querySelectorAll('.tier').forEach(t => io.observe(t));
+</script>
+</body>
+</html>

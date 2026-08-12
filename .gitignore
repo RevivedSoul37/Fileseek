@@ -1,0 +1,16 @@
+# Virtual environment (recreated by run.bat)
+venv/
+
+# Generated index — rebuilt on first launch (run `run.bat` or Re-index)
+data/fileseek.index
+data/metadata.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+desktop.ini

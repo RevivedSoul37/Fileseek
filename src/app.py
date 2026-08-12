@@ -1,0 +1,174 @@
+﻿import os
+import subprocess
+import sys
+import threading
+import time
+from pathlib import Path
+
+from flask import Flask, jsonify, render_template, request
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from modules.core import config
+from modules.core.utils import format_size, time_ago
+from modules.indexer.crawler import walk_files
+from modules.indexer.embedder import Embedder
+from modules.indexer.index_store import IndexStore
+from modules.search.engine import SearchEngine
+
+app = Flask(__name__)
+
+store = IndexStore()
+embedder = Embedder(config.EMBED_MODEL_NAME)
+engine = SearchEngine(store, embedder)
+
+index_state = {"running": False, "progress": "", "files": 0}
+index_lock = threading.Lock()
+
+
+def _open_in_explorer(path):
+    subprocess.Popen(["explorer", "/select,", os.path.normpath(path)])
+
+
+def _open_file(path):
+    try:
+        os.startfile(path)
+        return True, ""
+    except OSError as exc:
+        return False, str(exc)
+
+
+def _run_full_index():
+    with index_lock:
+        if index_state["running"]:
+            return
+        index_state["running"] = True
+    try:
+        index_state["progress"] = "Scanning folders..."
+        records = walk_files(config.SCAN_DIRS)
+        total = len(records)
+        index_state["files"] = total
+        index_state["progress"] = f"Scanned {total} files. Loading AI model..."
+        texts = [embedder.build_text(r) for r in records.values()]
+        index_state["progress"] = f"Embedding {total} files..."
+        embeddings = embedder.embed_texts(
+            texts, batch_size=config.EMBED_BATCH_SIZE, show_progress=False
+        )
+        index_state["progress"] = "Building FAISS index..."
+        store.build(records, embeddings)
+        store.save()
+        index_state["progress"] = f"Indexed {total} files at {time.strftime('%H:%M:%S')}"
+    except Exception as exc:
+        index_state["progress"] = f"Index failed: {exc}"
+    finally:
+        index_state["running"] = False
+
+
+@app.route("/")
+def home():
+    return render_template("index.html")
+
+
+@app.route("/api/search", methods=["POST"])
+def api_search():
+    payload = request.get_json(silent=True) or {}
+    query = payload.get("query", "")
+    category = payload.get("category", "all")
+    limit = payload.get("limit") or config.MAX_RESULTS
+    if not store.is_ready():
+        return jsonify({"results": [], "indexed": False, "query": query})
+    results = engine.search(query, max_results=limit, category=category)
+    return jsonify({"results": results, "indexed": True, "query": query})
+
+
+@app.route("/api/browse", methods=["GET"])
+def api_browse():
+    from modules.search.ranker import record_to_result
+    category = request.args.get("category", "all")
+    limit = min(int(request.args.get("limit", 60)), 500)
+    if not store.is_ready():
+        return jsonify({"results": [], "indexed": False, "total": 0})
+    records = list(store.metadata.values())
+    if category and category != "all":
+        records = [r for r in records if r.get("category") == category]
+    records.sort(key=lambda r: r.get("modified") or 0, reverse=True)
+    total = len(records)
+    page = records[:limit]
+    results = [record_to_result(r) for r in page]
+    return jsonify({"results": results, "indexed": True, "total": total})
+
+
+@app.route("/api/index", methods=["POST"])
+def api_index():
+    with index_lock:
+        if index_state["running"]:
+            return jsonify({"started": False, "reason": "already running"})
+    thread = threading.Thread(target=_run_full_index, daemon=True)
+    thread.start()
+    return jsonify({"started": True})
+
+
+@app.route("/api/status", methods=["GET"])
+def api_status():
+    stats = store.stats()
+    return jsonify({
+        "indexed": store.is_ready(),
+        "file_count": stats["file_count"],
+        "last_indexed": stats["last_indexed"],
+        "built_at": stats["built_at"],
+        "categories": stats["categories"],
+        "indexing": index_state["running"],
+        "progress": index_state["progress"],
+    })
+
+
+@app.route("/api/open/file", methods=["POST"])
+def api_open_file():
+    payload = request.get_json(silent=True) or {}
+    path = payload.get("path", "")
+    if not path or not os.path.isfile(path):
+        return jsonify({"ok": False, "error": "File not found"}), 404
+    ok, err = _open_file(path)
+    return jsonify({"ok": ok, "error": err}), (200 if ok else 500)
+
+
+@app.route("/api/open/folder", methods=["POST"])
+def api_open_folder():
+    payload = request.get_json(silent=True) or {}
+    path = payload.get("path", "")
+    if not path:
+        return jsonify({"ok": False, "error": "No path given"}), 400
+    if os.path.isfile(path):
+        _open_in_explorer(path)
+    elif os.path.isdir(path):
+        subprocess.Popen(["explorer", os.path.normpath(path)])
+    else:
+        return jsonify({"ok": False, "error": "Path not found"}), 404
+    return jsonify({"ok": True})
+
+
+@app.route("/api/config", methods=["GET"])
+def api_config():
+    return jsonify({
+        "scan_dirs": config.SCAN_DIRS,
+        "exclude_dirs": sorted(config.EXCLUDE_DIR_NAMES),
+        "port": config.PORT,
+        "max_results": config.MAX_RESULTS,
+        "embed_model": config.EMBED_MODEL_NAME,
+        "sensitive_markers": list(config.SENSITIVE_NAME_MARKERS),
+    })
+
+
+def _auto_load_or_build():
+    loaded = store.load()
+    if loaded:
+        index_state["progress"] = f"Loaded existing index ({len(store.metadata)} files)"
+        return
+    thread = threading.Thread(target=_run_full_index, daemon=True)
+    thread.start()
+
+
+if __name__ == "__main__":
+    print(f"FileSeek starting on http://{config.HOST}:{config.PORT}")
+    _auto_load_or_build()
+    app.run(host=config.HOST, port=config.PORT, debug=False)

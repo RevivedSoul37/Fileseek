@@ -1,0 +1,5 @@
+flask>=3.0
+faiss-cpu>=1.8
+sentence-transformers>=3.0
+watchdog>=4.0
+requests>=2.31
