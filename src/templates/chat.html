@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FileSeek — conversation</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗂️</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Karla:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="chat-page">
+<div class="chat-shell">
+    <header class="chat-head">
+        <a class="chat-back" href="/">← catalog</a>
+        <div class="chat-file" id="chat-file">
+            <span class="chat-file-icon" id="chat-file-icon">🗂️</span>
+            <div class="chat-file-meta">
+                <div class="chat-file-name" id="chat-file-name">opening the drawer…</div>
+                <div class="chat-file-path" id="chat-file-path"></div>
+            </div>
+            <span class="sensitive-badge" id="chat-sensitive" hidden>🔒 sensitive</span>
+        </div>
+        <span class="chat-stamp" id="chat-stamp"></span>
+    </header>
+
+    <main class="chat-log" id="chat-log"></main>
+
+    <footer class="chat-composer">
+        <form id="chat-form" class="chat-composer-form">
+            <input id="chat-input" type="text" placeholder="Ask anything about this file… the model also sees its folder as context" maxlength="1000" autocomplete="off">
+            <button class="icon-btn chat-send" id="chat-send" type="submit">Send</button>
+        </form>
+        <div class="chat-note">conversation stays on this machine · last 6 turns are kept as context</div>
+    </footer>
+</div>
+
+<script src="{{ url_for('static', filename='chat.js') }}"></script>
+</body>
+</html>

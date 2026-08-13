@@ -27,6 +27,18 @@ DOC_EXTENSIONS = {".md", ".txt", ".log"}
 
 DEFAULT_QUESTION = "What is this file and what does it do?"
 
+ASK_MORE_QUESTION = "Tell me more about this file, using what sits in its folder as clues."
+
+ASK_MORE_SYSTEM = (
+    "You are a friendly assistant in a conversation about one specific file on this computer. "
+    "You are shown that file's details, the other files in its folder, and short excerpts from "
+    "a few nearby text files. Use those siblings as clues to explain what this file is really for "
+    "(for example, a metadata file next to a model file, or a config next to a script). "
+    "Answer the latest question directly, in plain English, analogies welcome, no jargon. "
+    "If the clues are not enough to be sure, say so honestly instead of guessing. "
+    "Keep answers to 60-160 words unless the user asks for more."
+)
+
 
 def select_prompt(category, extension):
     if category == "code":
@@ -64,3 +76,33 @@ def binary_answer(record):
         "Its contents are in a format I can't read as plain text, so that's the full "
         "picture from this machine's file catalog - nothing here was sent anywhere else."
     )
+
+
+def build_ask_more_system(record, content, truncated, context):
+    lines = [
+        ASK_MORE_SYSTEM,
+        "",
+        f"File: {record.get('name', 'unknown')}",
+        f"Folder: {context.get('folder', record.get('parent_folder', 'unknown'))}",
+        f"Type: {record.get('extension', '') or 'no extension'} ({record.get('category', 'other')})",
+        f"Size: {format_size(record.get('size', 0))}",
+    ]
+    if truncated:
+        lines.append("Note: the file itself was too long - only its beginning is shown (or nothing, if binary).")
+    if content:
+        lines.append("")
+        lines.append("File content:")
+        lines.append(content)
+    siblings = context.get("siblings") or []
+    if siblings:
+        lines.append("")
+        lines.append("Other files in this folder:")
+        for sibling in siblings:
+            lines.append(f"- {sibling['name']} [{sibling['category']}, {format_size(sibling['size'])}]")
+    if context.get("hidden"):
+        lines.append(f"(plus {context['hidden']} more files not listed)")
+    for name, text in (context.get("excerpts") or {}).items():
+        lines.append("")
+        lines.append(f"Excerpt from neighbouring file {name}:")
+        lines.append(text)
+    return "\n".join(lines)

@@ -107,6 +107,27 @@ def home():
     return render_template("index.html")
 
 
+@app.route("/chat")
+def chat_page():
+    return render_template("chat.html")
+
+
+@app.route("/api/file-card", methods=["GET"])
+def api_file_card():
+    from modules.search.ranker import record_to_result
+    path = request.args.get("path", "")
+    if not path or not os.path.isfile(path):
+        return jsonify({"ok": False, "error": "File not found - it may have been moved or deleted"}), 404
+    record = store.get_record(norm_key(path)) if store.is_ready() else None
+    if record is None:
+        record = build_record(path)
+    if record is None:
+        return jsonify({"ok": False, "error": "Could not read this file"}), 404
+    result = record_to_result(record)
+    result["ok"] = True
+    return jsonify(result)
+
+
 @app.route("/api/search", methods=["POST"])
 def api_search():
     payload = request.get_json(silent=True) or {}
@@ -191,6 +212,36 @@ def api_ask():
         return jsonify({"ok": False, "error": str(exc)}), 503
     result["ok"] = True
     result["question"] = question.strip() or DEFAULT_QUESTION
+    result["sensitive"] = bool(record.get("sensitive"))
+    return jsonify(result)
+
+
+@app.route("/api/ask-more", methods=["POST"])
+def api_ask_more():
+    payload = request.get_json(silent=True) or {}
+    path = payload.get("path", "")
+    question = payload.get("question", "")
+    history = payload.get("history") or []
+    if not isinstance(history, list):
+        history = []
+    if not path or not os.path.isfile(path):
+        return jsonify({"ok": False, "error": "File not found - it may have been moved or deleted"}), 404
+    record = store.get_record(norm_key(path)) if store.is_ready() else None
+    if record is None:
+        record = build_record(path)
+    if record is None:
+        return jsonify({"ok": False, "error": "Could not read this file"}), 404
+    available, _ = explainer.client.is_available()
+    if not available:
+        return jsonify({
+            "ok": False,
+            "error": "Ollama is not running - start it with `ollama serve`, then try again",
+        }), 503
+    try:
+        result = explainer.explain_more(record, history, question)
+    except OllamaError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 503
+    result["ok"] = True
     result["sensitive"] = bool(record.get("sensitive"))
     return jsonify(result)
 

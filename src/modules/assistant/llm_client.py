@@ -58,3 +58,28 @@ class OllamaClient:
             status = exc.response.status_code if exc.response is not None else "?"
             raise OllamaError(f"Ollama returned HTTP {status}")
         return ((res.json() or {}).get("response") or "").strip()
+
+    def chat(self, messages, system=None, model=None):
+        available, models = self.is_available()
+        if not available:
+            raise OllamaError("Ollama is not running - start it with `ollama serve`")
+        use_model = model or self.model
+        if models and not any(m == use_model or m.startswith(use_model + ":") for m in models):
+            raise OllamaError(f"Model '{use_model}' is not downloaded - run `ollama pull {use_model}`")
+        full_messages = list(messages)
+        if system:
+            full_messages.insert(0, {"role": "system", "content": system})
+        payload = {"model": use_model, "messages": full_messages, "stream": False}
+        try:
+            res = self.session.post(f"{self.host}/api/chat", json=payload, timeout=self.timeout)
+            res.raise_for_status()
+        except requests.Timeout:
+            raise OllamaError(f"Ollama timed out after {self.timeout}s - try a shorter question")
+        except requests.ConnectionError:
+            self.invalidate_availability()
+            raise OllamaError("Ollama is not running - start it with `ollama serve`")
+        except requests.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else "?"
+            raise OllamaError(f"Ollama returned HTTP {status}")
+        body = res.json() or {}
+        return ((body.get("message") or {}).get("content") or "").strip()

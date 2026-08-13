@@ -173,11 +173,17 @@ print("\n-- Assistant: explainer with stubbed client --")
 class StubOllama:
     def __init__(self):
         self.calls = 0
+        self.chat_calls = 0
+        self.last_messages = None
     def is_available(self):
         return (True, [config.OLLAMA_MODEL, config.OLLAMA_CODE_MODEL])
     def generate(self, prompt, system=None, model=None):
         self.calls += 1
         return "stub answer"
+    def chat(self, messages, system=None, model=None):
+        self.chat_calls += 1
+        self.last_messages = list(messages)
+        return "stub chat answer"
 
 stub = StubOllama()
 test_explainer = Explainer(client=stub)
@@ -208,10 +214,38 @@ class DownOllama:
     def generate(self, prompt, system=None, model=None):
         from modules.assistant.llm_client import OllamaError
         raise OllamaError("Ollama is not running - start it with `ollama serve`")
+    def chat(self, messages, system=None, model=None):
+        from modules.assistant.llm_client import OllamaError
+        raise OllamaError("Ollama is not running - start it with `ollama serve`")
 
 app_module.explainer.client = DownOllama()
 resp_down = api.post("/api/ask", json={"path": str(code_file)})
 check("ask 503 with friendly error when Ollama down", resp_down.status_code == 503 and "Ollama" in resp_down.get_json()["error"], resp_down.get_json()["error"])
+
+print("\n-- Assistant: folder context --")
+from modules.assistant.folder_context import build_folder_context
+ctx = build_folder_context(str(code_file))
+check("folder context lists siblings without the ask target", all(s["name"] != code_file.name for s in ctx["siblings"]) and len(ctx["siblings"]) >= 1, f"{len(ctx['siblings'])} siblings")
+check("folder context excerpts only small text files", set(ctx["excerpts"].keys()) <= {s["name"] for s in ctx["siblings"]}, f"excerpts={sorted(ctx['excerpts'].keys())}")
+
+print("\n-- Assistant: explain_more with stubbed chat --")
+app_module.explainer.client = stub
+long_history = [{"role": "user" if i % 2 == 0 else "assistant", "content": f"turn {i}"} for i in range(20)]
+more_result = test_explainer.explain_more(code_record, long_history, "What does this file sit next to?")
+check("explain_more calls chat with trimmed history", stub.chat_calls == 1 and len(stub.last_messages) <= config.ASK_MORE_MAX_TURNS + 1, f"messages sent={len(stub.last_messages)}, cap={config.ASK_MORE_MAX_TURNS}")
+check("explain_more reports folder context in result", more_result["context_files"] >= 1, f"context_files={more_result['context_files']}, excerpts={more_result['excerpt_files']}")
+
+print("\n-- API: /api/ask-more contract --")
+resp_more_missing = api.post("/api/ask-more", json={"path": str(Path(ask_dir) / "nope.txt")})
+check("ask-more 404 for missing file", resp_more_missing.status_code == 404)
+
+app_module.explainer.client = stub
+resp_more_ok = api.post("/api/ask-more", json={"path": str(code_file), "history": [], "question": "What sits next to this file?"})
+check("ask-more 200 with answer for text file", resp_more_ok.status_code == 200 and resp_more_ok.get_json().get("ok") is True)
+
+app_module.explainer.client = DownOllama()
+resp_more_down = api.post("/api/ask-more", json={"path": str(code_file)})
+check("ask-more 503 when Ollama down", resp_more_down.status_code == 503 and "Ollama" in resp_more_down.get_json()["error"])
 
 print("\n-- Live Ollama smoke (auto-skipped when offline) --")
 from modules.assistant.llm_client import OllamaClient, OllamaError
@@ -224,6 +258,8 @@ if live_available:
     try:
         live_result = Explainer(client=live_client).explain(live_record, "What is this?")
         check("live ask returns an answer", bool(live_result["answer"]), f"{live_result['answer'][:60]} ({live_result['elapsed_ms']}ms)")
+        live_more = Explainer(client=live_client).explain_more(live_record, [], "What other files are in its folder?")
+        check("live ask-more returns a conversational answer", bool(live_more["answer"]), f"{live_more['answer'][:60]} ({live_more['elapsed_ms']}ms)")
     except OllamaError as exc:
         print(f"[SKIP] live ask could not run - {exc}")
 else:

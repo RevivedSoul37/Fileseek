@@ -268,16 +268,20 @@ function askErrorHtml(message) {
     return `<div class="ask-error">❌ ${escapeHtml(message || 'The ask did not come back — try again')}</div>`;
 }
 
-function askAnswerHtml(data) {
+function askAnswerHtml(data, path) {
     const sensitive = data.sensitive
         ? `<div class="ask-sensitive">marked sensitive — reviewed locally only, nothing leaves this machine</div>`
         : '';
     const truncatedNote = data.truncated ? ' · file was truncated' : '';
     const seconds = (data.elapsed_ms / 1000).toFixed(1);
     return `
+        <button class="ask-close" data-action="close-ask" title="Close this answer">✕</button>
         ${sensitive}
         <div class="ask-answer">${escapeHtml(data.answer)}</div>
-        <div class="ask-footer">stamped by ${escapeHtml(data.model)} · ${seconds}s${truncatedNote} · 100% local</div>`;
+        <div class="ask-footer">stamped by ${escapeHtml(data.model)} · ${seconds}s${truncatedNote} · 100% local
+            <button class="icon-btn ask-more-btn" data-action="ask-more" title="Keep talking to the model about this file">💬 Ask more</button>
+            <button class="icon-btn ask-more-btn" data-action="full-chat" data-path="${escapeHtml(path)}" title="Open the full conversation page">⛶ Full chat</button>
+        </div>`;
 }
 
 async function askAboutFile(btn) {
@@ -305,13 +309,106 @@ async function askAboutFile(btn) {
             panel.dataset.state = 'error';
             return;
         }
-        panel.innerHTML = askAnswerHtml(data);
+        panel.dataset.askQuestion = data.question || '';
+        panel.dataset.askPath = btn.dataset.path;
+        panel.innerHTML = askAnswerHtml(data, btn.dataset.path);
         panel.dataset.state = 'done';
     } catch (e) {
         panel.innerHTML = askErrorHtml('Server did not respond — is FileSeek still running?');
         panel.dataset.state = 'error';
     } finally {
         btn.disabled = false;
+    }
+}
+
+function chatBubbleHtml(turn) {
+    return `<div class="ask-msg ask-msg-${turn.role}">${escapeHtml(turn.content)}</div>`;
+}
+
+function chatMetaHtml(meta) {
+    const parts = ['stamped by ' + escapeHtml(meta.model)];
+    if (meta.sensitive) parts.push('marked sensitive — local only');
+    if (meta.context_files) parts.push('folder clues: ' + meta.context_files + ' sibling files');
+    parts.push('100% local');
+    return `<div class="ask-footer">${parts.join(' · ')}</div>`;
+}
+
+function renderChat(panel) {
+    const messages = (panel._history || []).map(chatBubbleHtml).join('');
+    panel.innerHTML = `
+        <button class="ask-close" data-action="close-ask" title="Close this conversation">✕</button>
+        <div class="ask-chat">
+            <div class="ask-chat-log">${messages}</div>
+            <form class="ask-chat-form">
+                <input class="ask-chat-input" type="text" placeholder="Ask more about this file…" maxlength="1000" autocomplete="off">
+                <button class="icon-btn ask-chat-send" type="submit">Send</button>
+            </form>
+            ${chatMetaHtml(panel._chatMeta || { model: 'local model' })}
+            <div class="ask-chat-actions">
+                <button class="icon-btn" data-action="full-chat" data-path="${escapeHtml(panel.dataset.askPath || '')}" title="Open the full conversation page">⛶ Full chat</button>
+            </div>
+        </div>`;
+    const input = panel.querySelector('.ask-chat-input');
+    if (input) input.focus();
+}
+
+function startChat(panel, btn) {
+    const answerEl = panel.querySelector('.ask-answer');
+    const answer = answerEl ? answerEl.textContent : '';
+    const question = panel.dataset.askQuestion || 'What is this file and what does it do?';
+    panel._history = [
+        { role: 'user', content: question },
+        { role: 'assistant', content: answer }
+    ];
+    panel._chatMeta = panel._chatMeta || { model: 'local model', sensitive: !!panel.querySelector('.ask-sensitive') };
+    panel.hidden = false;
+    panel.dataset.state = 'chat';
+    renderChat(panel);
+}
+
+async function sendChat(panel, question) {
+    const input = panel.querySelector('.ask-chat-input');
+    const sendBtn = panel.querySelector('.ask-chat-send');
+    const log = panel.querySelector('.ask-chat-log');
+    panel._history.push({ role: 'user', content: question });
+    if (input) input.disabled = true;
+    if (sendBtn) sendBtn.disabled = true;
+    if (log) log.insertAdjacentHTML('beforeend',
+        chatBubbleHtml({ role: 'user', content: question }) +
+        `<div class="ask-chat-typing">the model is reading the folder clues…</div>`);
+    try {
+        const history = panel._history.slice(0, -1);
+        const res = await fetch('/api/ask-more', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: panel.dataset.askPath, history, question })
+        });
+        const data = await res.json();
+        const typing = panel.querySelector('.ask-chat-typing');
+        if (typing) typing.remove();
+        if (!data.ok) {
+            panel._history.pop();
+            if (log) log.insertAdjacentHTML('beforeend', askErrorHtml(data.error));
+        } else {
+            panel._history.push({ role: 'assistant', content: data.answer });
+            panel._chatMeta = {
+                model: data.model,
+                sensitive: data.sensitive,
+                context_files: data.context_files
+            };
+            renderChat(panel);
+        }
+    } catch (e) {
+        panel._history.pop();
+        const typing = panel.querySelector('.ask-chat-typing');
+        if (typing) typing.remove();
+        const log2 = panel.querySelector('.ask-chat-log');
+        if (log2) log2.insertAdjacentHTML('beforeend', askErrorHtml('Server did not respond — is FileSeek still running?'));
+    } finally {
+        const input2 = panel.querySelector('.ask-chat-input');
+        const send2 = panel.querySelector('.ask-chat-send');
+        if (input2) input2.disabled = false;
+        if (send2) send2.disabled = false;
     }
 }
 
@@ -330,6 +427,32 @@ resultsEl.addEventListener('click', async (event) => {
         askAboutFile(btn);
         return;
     }
+    if (action === 'ask-more') {
+        const card = btn.closest('.result-card');
+        const panel = card ? card.querySelector('.ask-panel') : null;
+        if (!panel) return;
+        if (panel.dataset.state === 'chat') {
+            const input = panel.querySelector('.ask-chat-input');
+            if (input) input.focus();
+            return;
+        }
+        if (panel.dataset.state !== 'done' || panel.hidden) return;
+        startChat(panel);
+        return;
+    }
+    if (action === 'close-ask') {
+        const card = btn.closest('.result-card');
+        const panel = card ? card.querySelector('.ask-panel') : null;
+        if (!panel) return;
+        panel.hidden = true;
+        panel.dataset.state = '';
+        panel._history = null;
+        return;
+    }
+    if (action === 'full-chat') {
+        window.open('/chat?path=' + encodeURIComponent(btn.dataset.path), '_blank');
+        return;
+    }
     const path = btn.dataset.path;
     const endpoint = action === 'file' ? '/api/open/file' : '/api/open/folder';
     try {
@@ -343,6 +466,18 @@ resultsEl.addEventListener('click', async (event) => {
     } catch (e) {
         toast('Could not open path');
     }
+});
+
+resultsEl.addEventListener('submit', (event) => {
+    const form = event.target.closest('.ask-chat-form');
+    if (!form) return;
+    event.preventDefault();
+    const panel = form.closest('.ask-panel');
+    const input = form.querySelector('.ask-chat-input');
+    const question = (input ? input.value : '').trim();
+    if (!panel || !question) return;
+    input.value = '';
+    sendChat(panel, question);
 });
 
 filterButtons.forEach(btn => {
