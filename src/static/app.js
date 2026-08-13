@@ -19,6 +19,7 @@ let statusTimer = null;
 let baseCounts = {};
 let lastSearchCounts = null;
 let lastSearchTotal = 0;
+let askAvailable = false;
 
 function debounce(fn, ms) {
     return (...args) => {
@@ -104,7 +105,9 @@ function resultCard(r) {
             ${matchBadge}
             <button class="icon-btn" data-action="file" data-path="${escapeHtml(r.path)}">Open File</button>
             <button class="icon-btn" data-action="folder" data-path="${escapeHtml(r.path)}">Open Folder</button>
+            <button class="icon-btn ask-btn" data-action="ask" data-path="${escapeHtml(r.path)}" data-name="${escapeHtml(r.name)}" title="Ask a local AI what this file is">Ask</button>
         </div>
+        <div class="ask-panel" hidden></div>
     </div>`;
 }
 
@@ -159,6 +162,10 @@ async function refreshStatus() {
         }
         if (data.watching) {
             setPill(statusPill.textContent + ' · watching live', 'ready');
+        }
+        askAvailable = !!data.ask_available;
+        if (askAvailable) {
+            setPill(statusPill.textContent + ' · ask ready', 'ready');
         }
         progressText.textContent = data.progress && data.indexing ? data.progress : '';
         reindexBtn.disabled = !!data.indexing;
@@ -253,12 +260,74 @@ searchInput.addEventListener('input', () => {
     debouncedSearch();
 });
 
+function askLoadingHtml() {
+    return `<div class="ask-loading">🔎 Asking the local model to read this file… <span class="ask-loading-sub">first ask after a pause can take a few seconds</span></div>`;
+}
+
+function askErrorHtml(message) {
+    return `<div class="ask-error">❌ ${escapeHtml(message || 'The ask did not come back — try again')}</div>`;
+}
+
+function askAnswerHtml(data) {
+    const sensitive = data.sensitive
+        ? `<div class="ask-sensitive">marked sensitive — reviewed locally only, nothing leaves this machine</div>`
+        : '';
+    const truncatedNote = data.truncated ? ' · file was truncated' : '';
+    const seconds = (data.elapsed_ms / 1000).toFixed(1);
+    return `
+        ${sensitive}
+        <div class="ask-answer">${escapeHtml(data.answer)}</div>
+        <div class="ask-footer">stamped by ${escapeHtml(data.model)} · ${seconds}s${truncatedNote} · 100% local</div>`;
+}
+
+async function askAboutFile(btn) {
+    const card = btn.closest('.result-card');
+    const panel = card ? card.querySelector('.ask-panel') : null;
+    if (!panel) return;
+    if (!panel.hidden && panel.dataset.state === 'done') {
+        panel.hidden = true;
+        panel.dataset.state = '';
+        return;
+    }
+    panel.hidden = false;
+    panel.dataset.state = 'loading';
+    panel.innerHTML = askLoadingHtml();
+    btn.disabled = true;
+    try {
+        const res = await fetch('/api/ask', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: btn.dataset.path, question: '' })
+        });
+        const data = await res.json();
+        if (!data.ok) {
+            panel.innerHTML = askErrorHtml(data.error);
+            panel.dataset.state = 'error';
+            return;
+        }
+        panel.innerHTML = askAnswerHtml(data);
+        panel.dataset.state = 'done';
+    } catch (e) {
+        panel.innerHTML = askErrorHtml('Server did not respond — is FileSeek still running?');
+        panel.dataset.state = 'error';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
 resultsEl.addEventListener('click', async (event) => {
     const btn = event.target.closest('[data-action]');
     if (!btn) return;
     const action = btn.dataset.action;
     if (action === 'show-all') {
         runSearch(parseInt(btn.dataset.limit, 10) || undefined);
+        return;
+    }
+    if (action === 'ask') {
+        if (!askAvailable) {
+            toast('Ask is offline — start Ollama (`ollama serve`) to enable it');
+        }
+        askAboutFile(btn);
         return;
     }
     const path = btn.dataset.path;

@@ -38,6 +38,8 @@ ICON_BY_CATEGORY = {
 RECORD_FIELDS = (
     "name", "path", "parent_folder", "extension", "size", "modified",
     "category", "icon", "sensitive",
+    "last_diff_summary", "last_diff_lines_added", "last_diff_lines_removed",
+    "last_diff_size_delta", "last_diff_kind",
 )
 
 EXT_WORDS = {
@@ -77,6 +79,20 @@ EXT_WORDS = {
     ".torrent": "torrent download bittorrent",
     ".epub": "ebook book reading",
 }
+
+
+def decode_excerpt(head):
+    if not head:
+        return ""
+    for encoding in ("utf-8", "utf-16"):
+        try:
+            text = head.decode(encoding, errors="strict")
+        except UnicodeDecodeError:
+            continue
+        if "\x00" in text:
+            return None
+        return text
+    return None
 
 
 def get_file_category(extension):

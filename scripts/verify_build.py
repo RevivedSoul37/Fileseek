@@ -7,7 +7,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from modules.core import config
-from modules.core.utils import format_size, get_file_icon, get_file_category, time_ago
+from modules.core.utils import RECORD_FIELDS, format_size, get_file_icon, get_file_category, time_ago
 from modules.indexer.crawler import walk_files
 from modules.indexer.embedder import Embedder
 from modules.indexer.index_store import IndexStore
@@ -38,7 +38,7 @@ check("crawler found files", len(records) > 0, f"{len(records)} files in {elapse
 sample_keys = list(records.keys())[:3]
 for k in sample_keys:
     r = records[k]
-    check(f"record has all fields: {r['name'][:40]}", all(f in r for f in ("name","path","parent_folder","extension","size","modified","category","icon","sensitive")))
+    check(f"record has all fields: {r['name'][:40]}", all(f in r for f in RECORD_FIELDS if not f.startswith("last_diff_")))
 
 print("\n-- Embedding test --")
 embedder = Embedder(config.EMBED_MODEL_NAME)
@@ -137,7 +137,100 @@ print("\n-- record_to_result exposes diff fields --")
 result = record_to_result(rec)
 check("API result carries last_diff_summary", result.get("last_diff_summary") == "2 lines added \u00b7 1 line removed")
 
+print("\n-- Assistant: shared decode + content reader --")
+from modules.core.utils import decode_excerpt
+check("decode_excerpt moved to core.utils (text round-trip)", decode_excerpt("h\u00e9llo world".encode("utf-8")) == "h\u00e9llo world")
+check("decode_excerpt flags binary (NUL bytes)", decode_excerpt(b"\x89PNG\r\n\x1a\n\x00\x00") is None)
+
+from modules.assistant.content_reader import read_for_ask
+from modules.assistant.prompts import CODE_EXPLAINER, DOC_SUMMARIZER, FILE_EXPLAINER, select_prompt
+from modules.assistant.explainer import Explainer
+
+ask_dir = tempfile.mkdtemp(prefix="fileseek_ask_test_")
+small_txt = Path(ask_dir) / "small.txt"
+small_txt.write_text("hello\nworld\n", encoding="utf-8")
+res_small = read_for_ask(str(small_txt))
+check("content_reader reads text", res_small["kind"] == "text" and "hello" in res_small["content"] and not res_small["truncated"])
+
+big_txt = Path(ask_dir) / "big.txt"
+with open(big_txt, "w", encoding="utf-8") as fh:
+    for i in range(4000):
+        fh.write(f"line {i} of a very long file\n")
+res_big = read_for_ask(str(big_txt))
+check("content_reader caps large text with marker", res_big["kind"] == "text" and res_big["truncated"] and res_big["content"].startswith("[showing first"))
+
+blob_bin = Path(ask_dir) / "blob.bin"
+blob_bin.write_bytes(b"\x89PNG\r\n\x1a\n" + bytes(range(256)) * 4)
+res_bin = read_for_ask(str(blob_bin))
+check("content_reader treats binary as binary", res_bin["kind"] == "binary" and res_bin["content"] is None)
+
+print("\n-- Assistant: prompt selection --")
+check("prompt: code gets code_explainer", select_prompt("code", ".py") == CODE_EXPLAINER)
+check("prompt: markdown gets doc_summarizer", select_prompt("document", ".md") == DOC_SUMMARIZER)
+check("prompt: other gets file_explainer", select_prompt("image", ".png") == FILE_EXPLAINER)
+
+print("\n-- Assistant: explainer with stubbed client --")
+class StubOllama:
+    def __init__(self):
+        self.calls = 0
+    def is_available(self):
+        return (True, [config.OLLAMA_MODEL, config.OLLAMA_CODE_MODEL])
+    def generate(self, prompt, system=None, model=None):
+        self.calls += 1
+        return "stub answer"
+
+stub = StubOllama()
+test_explainer = Explainer(client=stub)
+blob_record = {"name": "blob.bin", "path": str(blob_bin), "parent_folder": "asktest", "extension": ".bin", "size": blob_bin.stat().st_size, "modified": blob_bin.stat().st_mtime, "category": "other", "sensitive": False}
+blob_result = test_explainer.explain(blob_record)
+check("binary explain answers without calling the model", blob_result["binary"] and stub.calls == 0 and "blob.bin" in blob_result["answer"], f"model calls={stub.calls}")
+
+code_file = Path(ask_dir) / "script.py"
+code_file.write_text("print('hi')\n", encoding="utf-8")
+code_record = {"name": "script.py", "path": str(code_file), "parent_folder": "asktest", "extension": ".py", "size": code_file.stat().st_size, "modified": time.time(), "category": "code", "sensitive": False}
+code_result = test_explainer.explain(code_record)
+check("code explain routes to the code model", code_result["model"] == config.OLLAMA_CODE_MODEL and code_result["binary"] is False, f"model={code_result['model']}")
+
+print("\n-- API: /api/ask contract --")
+import app as app_module
+api = app_module.app.test_client()
+
+resp_missing = api.post("/api/ask", json={"path": str(Path(ask_dir) / "nope.txt")})
+check("ask 404 for missing file", resp_missing.status_code == 404 and resp_missing.get_json()["ok"] is False)
+
+app_module.explainer.client = stub
+resp_ok = api.post("/api/ask", json={"path": str(code_file)})
+check("ask 200 with answer for text file", resp_ok.status_code == 200 and resp_ok.get_json().get("ok") is True, str(resp_ok.get_json()).strip(". ")[:80])
+
+class DownOllama:
+    def is_available(self):
+        return (False, [])
+    def generate(self, prompt, system=None, model=None):
+        from modules.assistant.llm_client import OllamaError
+        raise OllamaError("Ollama is not running - start it with `ollama serve`")
+
+app_module.explainer.client = DownOllama()
+resp_down = api.post("/api/ask", json={"path": str(code_file)})
+check("ask 503 with friendly error when Ollama down", resp_down.status_code == 503 and "Ollama" in resp_down.get_json()["error"], resp_down.get_json()["error"])
+
+print("\n-- Live Ollama smoke (auto-skipped when offline) --")
+from modules.assistant.llm_client import OllamaClient, OllamaError
+live_client = OllamaClient()
+live_available, _live_models = live_client.is_available()
+if live_available:
+    live_file = Path(ask_dir) / "live_smoke.txt"
+    live_file.write_text("Shopping list: milk, eggs, bread.\n", encoding="utf-8")
+    live_record = {"name": "live_smoke.txt", "path": str(live_file), "parent_folder": "asktest", "extension": ".txt", "size": live_file.stat().st_size, "modified": live_file.stat().st_mtime, "category": "document", "sensitive": False}
+    try:
+        live_result = Explainer(client=live_client).explain(live_record, "What is this?")
+        check("live ask returns an answer", bool(live_result["answer"]), f"{live_result['answer'][:60]} ({live_result['elapsed_ms']}ms)")
+    except OllamaError as exc:
+        print(f"[SKIP] live ask could not run - {exc}")
+else:
+    print("[SKIP] live Ollama smoke - Ollama not reachable; suite still green")
+
 import shutil
+shutil.rmtree(ask_dir, ignore_errors=True)
 shutil.rmtree(tmp_dir, ignore_errors=True)
 
 print("\n=== ALL CHECKS PASSED ===")

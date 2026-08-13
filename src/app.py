@@ -14,11 +14,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from modules.core import config
 from modules.core.utils import format_size, time_ago
-from modules.indexer.crawler import walk_files
+from modules.indexer.crawler import build_record, walk_files
 from modules.indexer.embedder import Embedder
 from modules.indexer.index_store import IndexStore
 from modules.search.engine import SearchEngine
 from modules.watcher.monitor import WatcherService
+from modules.watcher.snapshot_store import norm_key
+from modules.assistant.explainer import Explainer
+from modules.assistant.llm_client import OllamaError
+from modules.assistant.prompts import DEFAULT_QUESTION
 
 logging.basicConfig(
     level=logging.INFO,
@@ -36,6 +40,8 @@ embedder = Embedder(config.EMBED_MODEL_NAME)
 engine = SearchEngine(store, embedder)
 
 watcher = WatcherService(store, embedder)
+
+explainer = Explainer()
 
 index_state = {"running": False, "progress": "", "files": 0}
 index_lock = threading.Lock()
@@ -146,6 +152,7 @@ def api_index():
 @app.route("/api/status", methods=["GET"])
 def api_status():
     stats = store.stats()
+    ask_available = explainer.client.is_available()[0]
     return jsonify({
         "indexed": store.is_ready(),
         "file_count": stats["file_count"],
@@ -156,7 +163,36 @@ def api_status():
         "progress": index_state["progress"],
         "watching": watcher.running,
         "snapshot_count": len(watcher.snapshots.snapshots),
+        "ask_available": ask_available,
     })
+
+
+@app.route("/api/ask", methods=["POST"])
+def api_ask():
+    payload = request.get_json(silent=True) or {}
+    path = payload.get("path", "")
+    question = payload.get("question", "")
+    if not path or not os.path.isfile(path):
+        return jsonify({"ok": False, "error": "File not found - it may have been moved or deleted"}), 404
+    record = store.get_record(norm_key(path)) if store.is_ready() else None
+    if record is None:
+        record = build_record(path)
+    if record is None:
+        return jsonify({"ok": False, "error": "Could not read this file"}), 404
+    available, _ = explainer.client.is_available()
+    if not available:
+        return jsonify({
+            "ok": False,
+            "error": "Ollama is not running - start it with `ollama serve`, then try again",
+        }), 503
+    try:
+        result = explainer.explain(record, question)
+    except OllamaError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 503
+    result["ok"] = True
+    result["question"] = question.strip() or DEFAULT_QUESTION
+    result["sensitive"] = bool(record.get("sensitive"))
+    return jsonify(result)
 
 
 @app.route("/api/open/file", methods=["POST"])

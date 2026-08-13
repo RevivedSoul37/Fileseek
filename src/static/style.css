@@ -150,7 +150,7 @@ body {
 /* THE index card — the one warm surface in the room */
 .result-card {
     position: relative;
-    display: flex; gap: 14px;
+    display: flex; gap: 14px; flex-wrap: wrap;
     background:
         linear-gradient(var(--paper-top), var(--paper-top)) 0 34px / 100% 1px no-repeat,
         var(--paper);
@@ -238,6 +238,44 @@ body {
     white-space: nowrap;
 }
 .icon-btn:hover { background: rgba(38,32,22,.08); border-color: var(--ink); }
+.icon-btn:disabled { opacity: .5; cursor: wait; }
+
+/* ── Ask drawer — the slip of paper the librarian hands you ── */
+.ask-btn { color: #7a5a10; border-color: rgba(156,125,38,.6); font-weight: 700; }
+.ask-panel {
+    flex-basis: 100%;
+    margin: 6px 4px 4px 0;
+    padding: 14px 16px 12px;
+    background:
+        linear-gradient(var(--paper-top), var(--paper-top)) 0 26px / 100% 1px no-repeat,
+        #fbf7ec;
+    border: 1px dashed rgba(38,32,22,.3);
+    border-radius: 4px;
+    color: var(--ink);
+    animation: pull-out .2s ease both;
+}
+.ask-loading { font-size: 13px; color: var(--ink-faint); font-style: italic; padding: 14px 0; }
+.ask-loading-sub { display: block; margin-top: 4px; font-size: 11px; }
+.ask-error { font-size: 13px; color: var(--stamp); font-weight: 600; padding: 14px 0; }
+.ask-answer {
+    font-size: 13.5px; line-height: 1.65; color: var(--ink);
+    white-space: pre-wrap;
+    padding: 12px 0 4px;
+}
+.ask-footer {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: .04em;
+    text-transform: uppercase; color: var(--ink-faint);
+    border-top: 1px solid rgba(38,32,22,.15);
+    margin-top: 10px; padding-top: 8px;
+}
+.ask-sensitive {
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .05em;
+    color: var(--stamp); border: 1.5px solid var(--stamp);
+    border-radius: 3px; padding: 3px 8px;
+    display: inline-block; margin-bottom: 8px;
+    transform: rotate(-1.5deg);
+    background: rgba(179,64,46,.06);
+}
 
 /* ── Empty state ────────────────────────────────────── */
 .empty-state { text-align: center; padding: 56px 20px; }

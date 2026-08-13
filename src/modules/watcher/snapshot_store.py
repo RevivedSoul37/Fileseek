@@ -6,26 +6,13 @@ import time
 from pathlib import Path
 
 from ..core.config import DIFF_MAX_BYTES, DIFF_MAX_LINES, SNAPSHOT_MAX_HASH_BYTES, SNAPSHOT_PATH
+from ..core.utils import decode_excerpt
 
 _CHUNK = 1024 * 1024
 
 
 def norm_key(path):
     return str(path).lower()
-
-
-def _decode_excerpt(head):
-    if not head:
-        return ""
-    for encoding in ("utf-8", "utf-16"):
-        try:
-            text = head.decode(encoding, errors="strict")
-        except UnicodeDecodeError:
-            continue
-        if "\x00" in text:
-            return None
-        return text
-    return None
 
 
 class SnapshotStore:
@@ -127,7 +114,7 @@ class SnapshotStore:
                 truncated = hashed < size
         except OSError:
             return None
-        text = _decode_excerpt(head[:DIFF_MAX_BYTES])
+        text = decode_excerpt(head[:DIFF_MAX_BYTES])
         if text is not None:
             lines = text.splitlines()
             if len(lines) > DIFF_MAX_LINES:
