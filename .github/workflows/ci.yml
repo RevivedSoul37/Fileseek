@@ -43,4 +43,17 @@ jobs:
         run: python -m pytest tests/ -q
 
       - name: Verification suite (live crawler/index; Ollama steps auto-skip)
-        run: python scripts/verify_build.py
+        shell: pwsh
+        run: |
+          python scripts/verify_build.py 2>&1 | Tee-Object -FilePath verify.log
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Show verify log tail on failure
+        if: failure()
+        shell: pwsh
+        run: |
+          if (Test-Path verify.log) {
+            Write-Output "::group::verify.log tail (last 80 lines)"
+            Get-Content verify.log | Select-Object -Last 80
+            Write-Output "::endgroup::"
+          }

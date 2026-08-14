@@ -15,8 +15,9 @@ from modules.search.engine import SearchEngine
 
 def check(label, condition, detail=""):
     mark = "PASS" if condition else "FAIL"
-    print(f"[{mark}] {label}" + (f" \u2014 {detail}" if detail else ""))
+    print(f"[{mark}] {label}" + (f" — {detail}" if detail else ""))
     if not condition:
+        print(f"::error title=verify_build::{label} FAILED — {detail}")
         sys.exit(1)
 
 print("=== FileSeek Verification Suite ===\n")
@@ -435,8 +436,8 @@ check("activity limit falls back to default on bad input", resp_activity_bad.sta
 print("\n-- Settings: editable scan folders --")
 settings_test_dir = tempfile.mkdtemp(prefix="fileseek_settings_test_")
 settings_tmp_path = Path(settings_test_dir) / "settings.json"
-scan_root_a = tempfile.mkdtemp(prefix="scan_a_", dir=settings_test_dir)
-scan_root_b = tempfile.mkdtemp(prefix="scan_b_", dir=settings_test_dir)
+scan_root_a = os.path.realpath(tempfile.mkdtemp(prefix="scan_a_", dir=settings_test_dir))
+scan_root_b = os.path.realpath(tempfile.mkdtemp(prefix="scan_b_", dir=settings_test_dir))
 scan_nested = os.path.join(scan_root_a, "sub")
 os.makedirs(scan_nested, exist_ok=True)
 
