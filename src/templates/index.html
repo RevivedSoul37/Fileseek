@@ -22,6 +22,7 @@
         <div class="plate">
             <span id="status-pill" class="status-pill loading">opening drawers…</span>
         </div>
+        <button id="settings-btn" class="icon-btn settings-btn" title="Edit the scanned folders">⚙</button>
     </header>
 
     <main class="content">
@@ -66,6 +67,25 @@
             <button id="reindex-btn" class="stamp-btn">🔄 Refile everything</button>
         </div>
     </footer>
+</div>
+
+<div id="settings-modal" class="settings-modal" hidden>
+    <div class="settings-card">
+        <div class="settings-head">
+            <span class="settings-title">⚙ Scanned folders</span>
+            <button id="settings-close" class="ask-close" title="Close settings">✕</button>
+        </div>
+        <p class="settings-hint">Add or remove roots. Saving stops the watcher and starts a full re-index — progress shows in the ledger.</p>
+        <div id="settings-list" class="settings-list"></div>
+        <form id="settings-add-form" class="settings-add-form">
+            <input id="settings-add-input" type="text" placeholder="C:\Users\you\SomeFolder" autocomplete="off">
+            <button class="icon-btn" type="submit">＋ Add</button>
+        </form>
+        <div id="settings-error" class="settings-error" hidden></div>
+        <div class="settings-footer">
+            <button id="settings-save" class="stamp-btn save-btn">💾 Save &amp; re-index</button>
+        </div>
+    </div>
 </div>
 
 <aside id="activity-drawer" class="activity-drawer" hidden>

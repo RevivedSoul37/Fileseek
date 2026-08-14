@@ -206,6 +206,104 @@ function toggleActivityDrawer(forceOpen) {
 activityBtn.addEventListener('click', () => toggleActivityDrawer());
 activityClose.addEventListener('click', () => toggleActivityDrawer(false));
 
+/* ── Settings modal — edit which folders get scanned ── */
+const settingsBtn = document.getElementById('settings-btn');
+const settingsModal = document.getElementById('settings-modal');
+const settingsClose = document.getElementById('settings-close');
+const settingsList = document.getElementById('settings-list');
+const settingsAddForm = document.getElementById('settings-add-form');
+const settingsAddInput = document.getElementById('settings-add-input');
+const settingsError = document.getElementById('settings-error');
+const settingsSave = document.getElementById('settings-save');
+let pendingDirs = [];
+
+function renderSettingsList() {
+    settingsList.innerHTML = pendingDirs.map((dir, i) => `
+        <div class="settings-row">
+            <span class="settings-dir" title="${escapeHtml(dir)}">📁 ${escapeHtml(dir)}</span>
+            <button class="ask-close settings-remove" data-index="${i}" title="Remove this folder">✕</button>
+        </div>`).join('') || `<div class="settings-empty">no folders yet — add at least one to save</div>`;
+}
+
+function setSettingsError(message) {
+    if (!message) {
+        settingsError.hidden = true;
+        settingsError.textContent = '';
+        return;
+    }
+    settingsError.hidden = false;
+    settingsError.textContent = '❌ ' + message;
+}
+
+async function openSettings() {
+    try {
+        const res = await fetch('/api/config');
+        const data = await res.json();
+        pendingDirs = (data.scan_dirs || []).slice();
+        renderSettingsList();
+        setSettingsError('');
+        settingsModal.hidden = false;
+    } catch (e) {
+        toast('Could not load settings — is the server running?');
+    }
+}
+
+function closeSettings() {
+    settingsModal.hidden = true;
+}
+
+settingsAddForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const dir = settingsAddInput.value.trim();
+    if (!dir) return;
+    if (pendingDirs.includes(dir)) {
+        setSettingsError('That folder is already in the list');
+        return;
+    }
+    pendingDirs.push(dir);
+    settingsAddInput.value = '';
+    setSettingsError('');
+    renderSettingsList();
+});
+
+settingsList.addEventListener('click', (event) => {
+    const removeBtn = event.target.closest('.settings-remove');
+    if (!removeBtn) return;
+    pendingDirs.splice(parseInt(removeBtn.dataset.index, 10), 1);
+    setSettingsError('');
+    renderSettingsList();
+});
+
+settingsSave.addEventListener('click', async () => {
+    setSettingsError('');
+    settingsSave.disabled = true;
+    try {
+        const res = await fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ scan_dirs: pendingDirs })
+        });
+        const data = await res.json();
+        if (!data.ok) {
+            setSettingsError(data.error || 'Could not save settings');
+            return;
+        }
+        toast('Saved — re-index started, watcher will resume when done');
+        closeSettings();
+        refreshStatus();
+    } catch (e) {
+        setSettingsError('Server did not respond — is FileSeek still running?');
+    } finally {
+        settingsSave.disabled = false;
+    }
+});
+
+settingsModal.addEventListener('click', (event) => {
+    if (event.target === settingsModal) closeSettings();
+});
+settingsBtn.addEventListener('click', openSettings);
+settingsClose.addEventListener('click', closeSettings);
+
 async function refreshStatus() {
     try {
         const res = await fetch('/api/status');

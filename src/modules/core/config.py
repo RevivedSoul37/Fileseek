@@ -1,12 +1,18 @@
+import json
+import time
 from pathlib import Path
 
 USER_HOME = Path.home()
 
-SCAN_DIRS = [
+DEFAULT_SCAN_DIRS = [
     str(USER_HOME / "Downloads"),
     str(USER_HOME / "Documents"),
     str(USER_HOME / "Desktop"),
 ]
+
+# Mutated in place (apply_scan_dirs) so every module that imported this list
+# sees the live value after a settings change.
+SCAN_DIRS = list(DEFAULT_SCAN_DIRS)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
@@ -33,6 +39,7 @@ INDEX_PATH = INDEX_DIR / "fileseek.index"
 METADATA_PATH = INDEX_DIR / "metadata.json"
 SNAPSHOT_PATH = INDEX_DIR / "snapshots.json"
 ACTIVITY_PATH = INDEX_DIR / "activity.json"
+SETTINGS_PATH = INDEX_DIR / "settings.json"
 
 ACTIVITY_MAX_ENTRIES = 200
 ACTIVITY_DEFAULT_LIMIT = 50
@@ -64,3 +71,42 @@ ASK_MORE_MAX_SIBLINGS = 25
 ASK_MORE_EXCERPT_FILES = 3
 ASK_MORE_EXCERPT_CHARS = 1500
 ASK_MORE_MAX_TURNS = 6
+
+
+def load_settings():
+    """Read data/settings.json; missing/corrupt returns defaults. Keeps the
+    shape {"scan_dirs": [...]}; unknown keys are preserved opaquely."""
+    try:
+        payload = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            return {"scan_dirs": list(DEFAULT_SCAN_DIRS)}
+        scan_dirs = payload.get("scan_dirs")
+        if not isinstance(scan_dirs, list) or not scan_dirs:
+            payload["scan_dirs"] = list(DEFAULT_SCAN_DIRS)
+        payload.setdefault("scan_dirs", list(DEFAULT_SCAN_DIRS))
+        return payload
+    except (OSError, ValueError):
+        return {"scan_dirs": list(DEFAULT_SCAN_DIRS)}
+
+
+def save_settings(settings):
+    """Persist to data/settings.json with atomic tmp-replace. Returns True."""
+    payload = dict(settings or {})
+    payload.setdefault("scan_dirs", list(SCAN_DIRS))
+    payload["saved_at"] = time.time()
+    INDEX_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = SETTINGS_PATH.with_name(SETTINGS_PATH.name + ".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(SETTINGS_PATH)
+    return True
+
+
+def apply_scan_dirs(dirs):
+    """Replace SCAN_DIRS in place (see module docstring) with the given list."""
+    SCAN_DIRS[:] = [str(d) for d in dirs]
+    return list(SCAN_DIRS)
+
+
+def effective_scan_dirs():
+    """The roots currently in effect (settings applied at startup)."""
+    return list(SCAN_DIRS)

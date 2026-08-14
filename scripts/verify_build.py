@@ -432,6 +432,44 @@ check("activity endpoint returns newest-first entries", resp_activity.status_cod
 resp_activity_bad = api.get("/api/activity?limit=banana")
 check("activity limit falls back to default on bad input", resp_activity_bad.status_code == 200 and resp_activity_bad.get_json()["ok"] is True)
 
+print("\n-- Settings: editable scan folders --")
+settings_test_dir = tempfile.mkdtemp(prefix="fileseek_settings_test_")
+settings_tmp_path = Path(settings_test_dir) / "settings.json"
+scan_root_a = tempfile.mkdtemp(prefix="scan_a_", dir=settings_test_dir)
+scan_root_b = tempfile.mkdtemp(prefix="scan_b_", dir=settings_test_dir)
+scan_nested = os.path.join(scan_root_a, "sub")
+os.makedirs(scan_nested, exist_ok=True)
+
+_saved_settings_path = config.SETTINGS_PATH
+_saved_scan_dirs_api = list(config.SCAN_DIRS)
+config.SETTINGS_PATH = settings_tmp_path
+check("settings default to the three roots before any save", config.load_settings()["scan_dirs"] == list(config.DEFAULT_SCAN_DIRS), str(config.load_settings()["scan_dirs"]))
+config.save_settings({"scan_dirs": [scan_root_a]})
+check("settings survive a simulated restart (load after save)", config.load_settings()["scan_dirs"] == [scan_root_a], str(config.load_settings()["scan_dirs"]))
+
+_orig_run_full_index = app_module._run_full_index
+app_module._run_full_index = lambda: None
+try:
+    resp_missing = api.post("/api/config", json={"scan_dirs": [os.path.join(settings_test_dir, "nope")]})
+    check("missing folder rejected 400", resp_missing.status_code == 400, resp_missing.get_json()["error"])
+    resp_nested = api.post("/api/config", json={"scan_dirs": [scan_root_a, scan_nested]})
+    check("nested folder rejected 400", resp_nested.status_code == 400, resp_nested.get_json()["error"])
+    resp_index = api.post("/api/config", json={"scan_dirs": [str(config.INDEX_DIR)]})
+    check("index dir rejected 400", resp_index.status_code == 400, resp_index.get_json()["error"])
+    resp_ok = api.post("/api/config", json={"scan_dirs": [scan_root_a, scan_root_b]})
+    check("valid scan dirs accepted", resp_ok.status_code == 200 and resp_ok.get_json()["ok"] is True, str(resp_ok.get_json().get("scan_dirs")))
+    check("SAVE mutates the live SCAN_DIRS", config.SCAN_DIRS == [scan_root_a, scan_root_b], str(config.SCAN_DIRS))
+    resp_get_after = api.get("/api/config").get_json()
+    check("GET /api/config reflects the saved roots", resp_get_after["scan_dirs"] == [scan_root_a, scan_root_b])
+    config.apply_scan_dirs(list(config.DEFAULT_SCAN_DIRS))
+    app_module._apply_saved_settings()
+    check("scan dirs restored from settings.json after restart simulation", config.SCAN_DIRS == [scan_root_a, scan_root_b], str(config.SCAN_DIRS))
+finally:
+    app_module._run_full_index = _orig_run_full_index
+    config.apply_scan_dirs(_saved_scan_dirs_api)
+    config.SETTINGS_PATH = _saved_settings_path
+    _shutil.rmtree(settings_test_dir, ignore_errors=True)
+
 print("\n-- Assistant: folder context --")
 from modules.assistant.folder_context import build_folder_context
 ctx = build_folder_context(str(code_file))

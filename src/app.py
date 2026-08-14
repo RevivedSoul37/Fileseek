@@ -369,6 +369,52 @@ def api_config():
     })
 
 
+def _validate_scan_dirs(dirs):
+    """Return (clean_dirs, error). Rules: every path exists, is a directory,
+    is not inside another entry, and does not touch the index dir."""
+    if not isinstance(dirs, list) or not dirs:
+        return None, "Provide a non-empty scan_dirs list"
+    cleaned = []
+    for raw in dirs:
+        if not isinstance(raw, str) or not raw.strip():
+            return None, "Every scan dir must be a non-empty path"
+        path = os.path.realpath(raw.strip())
+        if not os.path.isdir(path):
+            return None, f"Not a folder: {raw}"
+        index_real = os.path.realpath(str(config.INDEX_DIR))
+        if path == index_real or path.startswith(index_real + os.sep):
+            return None, f"Scan dirs must not live inside the index dir ({config.INDEX_DIR})"
+        for existing in cleaned:
+            if path.startswith(existing + os.sep):
+                return None, f"Nested: {raw} sits inside {existing}"
+            if existing.startswith(path + os.sep):
+                return None, f"Nested: {existing} sits inside {raw}"
+        if path not in cleaned:
+            cleaned.append(path)
+    return cleaned, None
+
+
+@app.route("/api/config", methods=["POST"])
+def api_config_update():
+    with index_lock:
+        if index_state["running"]:
+            return jsonify({"ok": False, "error": "Cannot change scan dirs while an index run is in progress"}), 409
+    payload = request.get_json(silent=True) or {}
+    cleaned, error = _validate_scan_dirs(payload.get("scan_dirs"))
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    settings = config.load_settings()
+    settings["scan_dirs"] = cleaned
+    config.save_settings(settings)
+    config.apply_scan_dirs(cleaned)
+    if watcher.running:
+        watcher.stop()
+    log.info("Scan dirs updated to %d folder(s) - full re-index requested", len(cleaned))
+    thread = threading.Thread(target=_run_full_index, daemon=True)
+    thread.start()
+    return jsonify({"ok": True, "scan_dirs": cleaned})
+
+
 def _start_watcher_if_ready():
     if watcher.running or not store.is_ready():
         return
@@ -377,6 +423,18 @@ def _start_watcher_if_ready():
         index_state["progress"] = f"Watcher live ({len(watcher.snapshots.snapshots)} snapshots)"
     else:
         log.warning("Watcher failed to start")
+
+
+def _apply_saved_settings():
+    """Refresh the scan roots from data/settings.json before anything scans.
+    Roots that vanished from disk fall back so the catalog never starts
+    against an empty room."""
+    settings = config.load_settings()
+    dirs = [d for d in (settings.get("scan_dirs") or []) if os.path.isdir(d)]
+    if not dirs:
+        dirs = list(config.DEFAULT_SCAN_DIRS)
+    config.apply_scan_dirs(dirs)
+    log.info("Scan roots: %s", ", ".join(dirs))
 
 
 def _auto_load_or_build():
@@ -409,5 +467,6 @@ if __name__ == "__main__":
         raise SystemExit(1)
     log.info("FileSeek starting on http://%s:%d", config.HOST, config.PORT)
     _install_signal_handlers()
+    _apply_saved_settings()
     _auto_load_or_build()
     app.run(host=config.HOST, port=config.PORT, debug=False)

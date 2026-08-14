@@ -103,7 +103,12 @@ drawer is open, is capped at 200 entries, and survives restarts via
 - The index lives in `data/` and loads instantly on subsequent launches.
 
 ## What gets scanned
-- `C:\Users\liter\Downloads`, `Documents`, `Desktop`
+- Defaults: `C:\Users\liter\Downloads`, `Documents`, `Desktop`
+- Edit them any time: the **⚙** button in the masthead opens the settings card
+  where you can add or remove scan roots (plain path input, validated
+  server-side — the folder must exist and must not be nested in another root,
+  or the index dir). Saving persists to `data/settings.json`, stops the watcher
+  and kicks a full re-index; the watcher resumes when indexing finishes.
 - Skipped automatically: `node_modules`, `.git`, `__pycache__`, `venv`, `.venv`,
   `AppData`, `$Recycle Bin`, caches, and build folders.
 

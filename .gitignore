@@ -8,6 +8,8 @@ data/snapshots.json
 data/snapshots.json.tmp
 data/activity.json
 data/activity.json.tmp
+data/settings.json
+data/settings.json.tmp
 
 # Python
 __pycache__/

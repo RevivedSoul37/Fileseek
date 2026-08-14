@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Settings UI + editable scan folders (removes the hardcoded SCAN_DIRS):
+  `config.py` gains `load_settings()` / `save_settings()` / `apply_scan_dirs()`
+  over `data/settings.json`; **⚙** masthead button opens a modal with
+  add/remove path rows; `POST /api/config` validates the roots (must exist,
+  no nesting, not the index dir), persists, stops the watcher and starts the
+  re-index — progress shows in the ledger as before. Roots are applied at
+  startup before the first scan.
 - Activity feed (finishes the Phase 2 promise): a capped 200-entry ring
   (`modules/watcher/activity_log.py`) persisted to `data/activity.json`;
   `sync.py` appends one entry per applied watcher event (create/modify/delete/

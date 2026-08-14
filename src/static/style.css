@@ -500,6 +500,71 @@ body {
     text-transform: uppercase; color: var(--chalk-faint); text-align: center;
 }
 
+/* ── Settings modal — brass-framed card over the lacquer ── */
+.settings-modal {
+    position: fixed; inset: 0; z-index: 95;
+    background: rgba(8,13,11,.72);
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(2px);
+    animation: drawer-in .18s ease both;
+}
+.settings-card {
+    position: relative;
+    width: min(560px, 92vw); max-height: 82vh; overflow-y: auto;
+    background: var(--paper); color: var(--ink);
+    border: 1.5px solid var(--brass-dim);
+    border-radius: var(--card-radius);
+    box-shadow: 0 18px 50px rgba(0,0,0,.6);
+    padding: 20px 22px 18px;
+}
+.settings-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 6px;
+}
+.settings-title {
+    font-family: var(--font-display); font-weight: 650; font-size: 19px;
+    color: var(--ink);
+}
+.settings-hint {
+    font-size: 12.5px; color: var(--ink-faint); line-height: 1.6; margin-bottom: 12px;
+}
+.settings-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.settings-empty {
+    font-size: 12.5px; font-style: italic; color: var(--ink-faint); padding: 8px 2px;
+}
+.settings-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    background: #fffdf4; border: 1px solid rgba(38,32,22,.22);
+    border-radius: 4px; padding: 7px 10px;
+}
+.settings-dir {
+    font-family: var(--font-mono); font-size: 12px; color: var(--ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.settings-row .ask-close { position: static; }
+.settings-add-form { display: flex; gap: 8px; margin-bottom: 10px; }
+.settings-add-form input {
+    flex: 1; background: #fffdf4; border: 1px solid rgba(38,32,22,.3);
+    border-radius: 4px; padding: 8px 11px;
+    font-family: var(--font-mono); font-size: 12px; color: var(--ink); outline: none;
+    transition: border-color .15s, box-shadow .15s;
+}
+.settings-add-form input:focus {
+    border-color: var(--brass-dim);
+    box-shadow: 0 0 0 2px rgba(201,162,39,.18);
+}
+.settings-error {
+    font-size: 12.5px; color: var(--stamp); font-weight: 600; margin-bottom: 10px;
+}
+.settings-footer { text-align: right; }
+.save-btn {
+    color: var(--stamp); border-color: rgba(179,64,46,.55); font-weight: 700;
+}
+.save-btn:hover { border-color: var(--stamp); }
+.settings-btn {
+    font-size: 15px; padding: 6px 11px;
+}
+
 /* ── Toast ──────────────────────────────────────────── */
 .toast {
     position: fixed; bottom: 22px; left: 50%;

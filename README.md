@@ -148,6 +148,13 @@ That’s the whole ritual. Later runs load the saved index instantly.
 | Internet | only for the one-time dependency install |
 | Ollama | optional — only for Ask / Ask More (`llama3:8b`, `qwen2.5-coder`) |
 
+## Scanned folders
+
+FileSeek indexes **Downloads, Documents and Desktop** by default. Change this
+any time with the **⚙** button in the masthead: add or remove roots, and
+saving validates them (must exist, no nesting, never the index dir), persists
+`data/settings.json`, and kicks a full re-index.
+
 ---
 
 ## Inside
