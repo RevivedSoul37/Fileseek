@@ -281,6 +281,7 @@ function askAnswerHtml(data, path) {
         <div class="ask-footer">stamped by ${escapeHtml(data.model)} · ${seconds}s${truncatedNote} · 100% local
             <button class="icon-btn ask-more-btn" data-action="ask-more" title="Keep talking to the model about this file">💬 Ask more</button>
             <button class="icon-btn ask-more-btn" data-action="full-chat" data-path="${escapeHtml(path)}" title="Open the full conversation page">⛶ Full chat</button>
+            <button class="icon-btn ask-more-btn compare-btn" data-action="compare" data-path="${escapeHtml(path)}" title="Ask a cloud AI about this file's name, type and size — never its content">☁ Compare</button>
         </div>`;
 }
 
@@ -345,6 +346,7 @@ function renderChat(panel) {
             </form>
             ${chatMetaHtml(panel._chatMeta || { model: 'local model' })}
             <div class="ask-chat-actions">
+                <button class="icon-btn compare-btn" data-action="compare" data-path="${escapeHtml(panel.dataset.askPath || '')}" title="Ask a cloud AI about this file's name, type and size — never its content">☁ Compare</button>
                 <button class="icon-btn" data-action="full-chat" data-path="${escapeHtml(panel.dataset.askPath || '')}" title="Open the full conversation page">⛶ Full chat</button>
             </div>
         </div>`;
@@ -412,12 +414,43 @@ async function sendChat(panel, question) {
     }
 }
 
+async function compareWithCloud(btn) {
+    const path = btn.dataset.path;
+    if (!path) return;
+    btn.disabled = true;
+    try {
+        const res = await fetch('/api/compare', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path })
+        });
+        const data = await res.json();
+        if (!data.ok) {
+            toast(data.error || 'Compare did not come back — try again');
+            return;
+        }
+        if (data.sensitive && !window.confirm('This file is marked sensitive.\nOnly its name, type and size would leave this machine — never its content.\nOpen the cloud AIs anyway?')) {
+            return;
+        }
+        data.links.forEach(link => window.open(link.url, '_blank'));
+        toast('Opened ' + data.links.length + ' cloud AIs — name/type/size only, content stays local');
+    } catch (e) {
+        toast('Compare failed — is FileSeek still running?');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
 resultsEl.addEventListener('click', async (event) => {
     const btn = event.target.closest('[data-action]');
     if (!btn) return;
     const action = btn.dataset.action;
     if (action === 'show-all') {
         runSearch(parseInt(btn.dataset.limit, 10) || undefined);
+        return;
+    }
+    if (action === 'compare') {
+        compareWithCloud(btn);
         return;
     }
     if (action === 'ask') {

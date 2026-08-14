@@ -304,6 +304,23 @@ finally:
         pass
     _shutil.rmtree(open_dir, ignore_errors=True)
 
+print("\n-- Phase 4: Compare Mode A (cloud redirect) --")
+from modules.compare import platforms, side_by_side
+
+compare_record = {"name": "Resume.pdf", "path": str(code_file), "parent_folder": "asktest", "extension": ".pdf", "size": 12345, "modified": time.time(), "category": "document", "icon": get_file_icon(".pdf"), "sensitive": False}
+links = platforms.compare_links(compare_record, "what is this file?")
+check("compare returns four links", len(links) == 4, [l["platform"] for l in links])
+check("compare links are URL-encoded", all("%20" in l["url"] and " " not in l["url"].split("://", 1)[1] for l in links), links[0]["url"][:60])
+check("compare links never carry file content", all(platforms.url_never_leaks_content(l["url"]) and "File content:" not in l["url"] for l in links))
+check("compare default question fills in", "What%20is%20this%20file" in platforms.compare_links(compare_record, "")[0]["url"])
+check("compare mode B reports unavailable without keys", side_by_side.compare_side_by_side(compare_record, "")["available"] is False)
+
+resp_compare_missing = api.post("/api/compare", json={"path": str(Path(ask_dir) / "nope.txt")})
+check("compare 404 for missing file", resp_compare_missing.status_code == 404 and resp_compare_missing.get_json()["ok"] is False)
+resp_compare_ok = api.post("/api/compare", json={"path": str(code_file), "question": "what does this do?"})
+data_compare = resp_compare_ok.get_json()
+check("compare 200 with four links", resp_compare_ok.status_code == 200 and data_compare.get("ok") and len(data_compare["links"]) == 4, str(data_compare.get("side_by_side")))
+
 print("\n-- Assistant: folder context --")
 from modules.assistant.folder_context import build_folder_context
 ctx = build_folder_context(str(code_file))

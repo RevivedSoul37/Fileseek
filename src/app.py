@@ -297,6 +297,25 @@ def api_ask_more():
     return jsonify(result)
 
 
+@app.route("/api/compare", methods=["POST"])
+def api_compare():
+    from modules.compare import platforms, side_by_side
+    payload = request.get_json(silent=True) or {}
+    path = payload.get("path", "")
+    question = payload.get("question", "")
+    if not path or not os.path.isfile(path):
+        return jsonify({"ok": False, "error": "File not found - it may have been moved or deleted"}), 404
+    record = store.get_record(norm_key(path)) if store.is_ready() else None
+    if record is None:
+        record = build_record(path)
+    if record is None:
+        return jsonify({"ok": False, "error": "Could not read this file"}), 404
+    links = platforms.compare_links(record, question)
+    result = {"ok": True, "links": links, "sensitive": bool(record.get("sensitive"))}
+    result["side_by_side"] = side_by_side.compare_side_by_side(record, question)
+    return jsonify(result)
+
+
 @app.route("/api/open/file", methods=["POST"])
 def api_open_file():
     payload = request.get_json(silent=True) or {}

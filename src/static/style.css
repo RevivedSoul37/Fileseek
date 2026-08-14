@@ -325,6 +325,14 @@ body {
 .ask-chat-input:disabled { opacity: .6; }
 .ask-chat-actions { margin-top: 8px; text-align: right; }
 
+/* ── Compare — ☁ cloud, red stamp says opt-in, leaves the machine ── */
+.compare-btn {
+    color: var(--stamp); border-color: rgba(179,64,46,.55);
+    font-weight: 700; margin-left: 8px;
+}
+.compare-btn:hover { background: rgba(179,64,46,.08); border-color: var(--stamp); }
+.chat-compare { margin-right: 12px; flex-shrink: 0; }
+
 /* ── Full chat page — the reading desk with a correspondent ── */
 .chat-page { overflow: hidden; }
 .chat-shell { display: flex; flex-direction: column; height: 100vh; }

@@ -214,10 +214,15 @@ and a live tally counts your progress.
 | 2 · Live watcher | **done** | `watchdog` keeps the index current; change-diff stamps |
 | 3 · Plain-language assistant | **done** | local Ollama explains any file in your words |
 | 3.5 · Ask More + full chat | **done** | follow-up conversation with folder context, `/chat` page |
-| 4 · Compare with cloud AI | planned | opt-in second opinion from ChatGPT/Gemini/Claude |
+| 4 · Compare with cloud AI | **done** | opt-in redirect (Mode A): ChatGPT/Gemini/Claude/Perplexity |
 
-The `compare/` package already exists as an empty socket so Phase 4 plugs in
-without rewriting the rest.
+### Compare — ☁ a second opinion, explicitly opt-in
+
+From the Ask panel (answer or chat) or the full chat page, click **☁ Compare**.
+FileSeek opens the four cloud AIs in new tabs with the file’s **name, type and
+size plus your question already filled in** — the file’s *content never leaves
+this machine*. Sensitive files get an extra confirmation first. Only metadata
+travels, and only when you click.
 
 ---
 
@@ -226,8 +231,9 @@ without rewriting the rest.
 Everything runs on your machine. File names are embedded locally by a 22 MB
 model; Ask answers are written by local Ollama models; folder context is
 assembled in Python and only capped excerpts ever reach the model — which is
-also local. Nothing is uploaded, phoned home, or telemetered. Phase 4’s cloud
-comparison will be explicitly opt-in and clearly labeled.
+also local. Nothing is uploaded, phoned home, or telemetered. The only thing
+that can leave your machine is the ☁ Compare second opinion, and only when you
+click it — then it carries the file’s name, type and size, never its content.
 
 **Security model.** FileSeek binds to `127.0.0.1` only, has no authentication by
 design, and validates that open/file requests point inside a configured scan

@@ -70,6 +70,14 @@ files too, since those get their meaning from what is around them.
   sensitive badge. It opens with an automatic first question and keeps the same
   folder-clue context. Use **← catalog** to go back.
 
+## Compare with Cloud AI (☁, opt-in)
+From the Ask answer footer, the inline chat, or the full chat header, click
+**☁ Compare**. FileSeek opens **ChatGPT, Gemini, Claude and Perplexity** in new
+tabs with the question pre-filled. This is Mode A (free redirect) — no API keys,
+and the payload is **only the file's name, type and size plus your question**:
+the file's *content never leaves the machine*. Sensitive files prompt an extra
+confirmation. Compare needs no Ollama and no index entry.
+
 ## Indexing
 - The index builds automatically on first launch (scans Downloads, Documents, Desktop).
 - The status bar shows file count and when the index was last built.
@@ -95,7 +103,7 @@ scan roots.
 1. ✅ Semantic search — meaning-based search over Downloads/Documents/Desktop
 2. ✅ Live file watcher — index updates itself in real time; cards show what changed
 3. ✅ Plain-language assistant — Ask button explains any file via local Ollama
-4. 🔜 Compare with Cloud AI — opt-in second opinion from ChatGPT/Gemini/Claude
+4. ✅ Compare with Cloud AI — opt-in ☁ second opinion (name/type/size only, never content)
 5. 🔜 Ask over PDF/DOCX contents (current Ask reads text/code/docs only)
 
 ## Troubleshooting

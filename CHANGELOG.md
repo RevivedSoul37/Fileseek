@@ -8,12 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Phase 4, Compare Mode A: `modules/compare/platforms.py` builds opt-in
+  redirect URLs for ChatGPT / Gemini / Claude / Perplexity; payload = file
+  name/type/size + question only, content never leaves the machine.
+- `modules/compare/side_by_side.py` — the documented Mode-B (env-var API key)
+  socket, returns `{"available": False}` until keys exist.
+- `POST /api/compare` endpoint; ☁ Compare button in the Ask answer footer,
+  inline chat, and the full chat page header (red opt-in styling, sensitive
+  confirmation on the catalog).
 - MIT `LICENSE` file; `requirements.txt` pinned to exact venv versions (loose
   floors kept as comments).
 - Graceful shutdown: Ctrl+C / console close stops the watcher and saves the
   index and snapshots immediately instead of waiting for the 30 s interval.
 - Security model documented (localhost bind, path validation, no auth by design)
   in README and guide.
+
+### Changed
+- Roadmap: Phase 4 Compare marked done; README and guide document ☁ Compare.
 
 ### Security
 - `/api/open/file` and `/api/open/folder` now validate that the requested

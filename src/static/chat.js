@@ -10,6 +10,7 @@ const pathEl = document.getElementById('chat-file-path');
 const iconEl = document.getElementById('chat-file-icon');
 const sensitiveEl = document.getElementById('chat-sensitive');
 const stampEl = document.getElementById('chat-stamp');
+const compareBtnEl = document.getElementById('chat-compare');
 
 let history = [];
 let busy = false;
@@ -82,6 +83,32 @@ formEl.addEventListener('submit', (event) => {
     if (!question) return;
     inputEl.value = '';
     sendQuestion(question);
+});
+
+compareBtnEl.addEventListener('click', async () => {
+    if (!filePath || compareBtnEl.disabled) return;
+    compareBtnEl.disabled = true;
+    try {
+        const res = await fetch('/api/compare', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: filePath })
+        });
+        const data = await res.json();
+        if (!data.ok) {
+            bubble('assistant', '❌ ' + (data.error || 'Compare did not come back — try again.'));
+            return;
+        }
+        if (data.sensitive && !window.confirm('This file is marked sensitive.\nOnly its name, type and size would leave this machine — never its content.\nOpen the cloud AIs anyway?')) {
+            return;
+        }
+        data.links.forEach(link => window.open(link.url, '_blank'));
+        bubble('assistant', '☁ Opened ' + data.links.length + ' cloud AIs in new tabs — they see only the file’s name, type and size. Its content never leaves this machine.');
+    } catch (e) {
+        bubble('assistant', '❌ Server did not respond — is FileSeek still running?');
+    } finally {
+        compareBtnEl.disabled = false;
+    }
 });
 
 (async () => {
