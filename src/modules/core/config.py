@@ -115,7 +115,3 @@ def apply_scan_dirs(dirs):
     SCAN_DIRS[:] = [str(d) for d in dirs]
     return list(SCAN_DIRS)
 
-
-def effective_scan_dirs():
-    """The roots currently in effect (settings applied at startup)."""
-    return list(SCAN_DIRS)

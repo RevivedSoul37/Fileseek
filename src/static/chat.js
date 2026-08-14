@@ -92,7 +92,7 @@ compareBtnEl.addEventListener('click', async () => {
         const res = await fetch('/api/compare', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: filePath })
+            body: JSON.stringify({ path: filePath, question: lastQuestion })
         });
         const data = await res.json();
         if (!data.ok) {

@@ -1,12 +1,15 @@
 import os
 from pathlib import Path
 
-from ..core.config import SCAN_DIRS, EXCLUDE_PATHS, EXCLUDE_DIR_NAMES, SENSITIVE_NAME_MARKERS
+from ..core.config import SCAN_DIRS, EXCLUDE_PATHS, EXCLUDE_DIR_NAMES, SENSITIVE_NAME_MARKERS, INDEX_DIR
 from ..core.utils import get_file_category, get_file_icon
 
 
 def _is_excluded_dir(dir_path):
     resolved = str(Path(dir_path).resolve()).lower()
+    data_real = str(Path(INDEX_DIR).resolve()).lower()
+    if resolved == data_real or resolved.startswith(data_real + os.sep):
+        return True
     if any(resolved.startswith(p.lower()) for p in EXCLUDE_PATHS):
         return True
     try:

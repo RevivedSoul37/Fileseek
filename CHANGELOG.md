@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (2026-08-15 external audit response)
+- Flask now runs threaded: a slow Ollama answer no longer stalls the status
+  pill, activity drawer or any other request.
+- Compare sends your typed question (catalog panel and full chat page).
+- `IndexStore.save()` is atomic (tmp + replace) like every other store —
+  a kill mid-save can no longer corrupt `data/`.
+- The crawler no longer indexes FileSeek's own `data/` dir (index/snapshots
+  files will not appear as search results).
+- `/api/ask`, `/api/ask-more`, `/api/compare`, `/api/file-card` now 403 for
+  paths outside the scan roots, matching the documented security posture.
+- `/api/search` returns an empty result set (200) on blank queries instead of
+  crashing; garbage `limit` values on search/browse fall back to defaults.
+- Dead code removed: `Sync.needs_save`, `EventQueue.is_idle`,
+  `SnapshotStore.remove_prefix`, `config.effective_scan_dirs`.
+
+### Changed
+- README/guide corrections from the audit: binary answers need Ollama up;
+  the privacy line now says your *files* never leave the machine (the UI
+  fetches fonts from Google); chat non-persistence and Windows-only listed
+  as known limitations; verify suite count updated to 120.
+
+### Deferred
+- `data/snapshots.json` size/churn redesign — planned in
+  `private/plans/snapshot-store-redesign.md`; deferred by user decision.
+
 ## [1.2.0] - 2026-08-15
 
 ### Added

@@ -121,7 +121,9 @@ class IndexStore:
             index_path = Path(path or INDEX_PATH)
             meta_path = Path(metadata_path or METADATA_PATH)
             INDEX_DIR.mkdir(parents=True, exist_ok=True)
-            faiss.write_index(self.index, str(index_path))
+            tmp_index = index_path.with_name(index_path.name + ".tmp")
+            faiss.write_index(self.index, str(tmp_index))
+            tmp_index.replace(index_path)
             payload = {
                 "dim": self.dim,
                 "built_at": self.built_at,
@@ -130,7 +132,9 @@ class IndexStore:
                 "path_to_id": self.path_to_id,
                 "metadata": {str(k): v for k, v in self.metadata.items()},
             }
-            meta_path.write_text(json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
+            tmp_meta = meta_path.with_name(meta_path.name + ".tmp")
+            tmp_meta.write_text(json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
+            tmp_meta.replace(meta_path)
 
     def load(self, path=None, metadata_path=None):
         with self.lock:

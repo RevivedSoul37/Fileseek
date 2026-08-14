@@ -77,14 +77,6 @@ class SnapshotStore:
                 moved += 1
             return moved
 
-    def remove_prefix(self, dir_path):
-        prefix = norm_key(dir_path).rstrip(os.sep) + os.sep
-        with self.lock:
-            victims = [k for k in self.snapshots if k.startswith(prefix)]
-            for key in victims:
-                del self.snapshots[key]
-            return len(victims)
-
     def snapshot_file(self, path):
         """Read `path` once; return {"hash", "size", "modified", "text"} where
         text is a capped excerpt (None for binary/unreadable files), or None

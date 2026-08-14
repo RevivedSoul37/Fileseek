@@ -98,6 +98,3 @@ class EventQueue:
                 return []
         return self.flush()
 
-    def is_idle(self):
-        with self.lock:
-            return not self.pending

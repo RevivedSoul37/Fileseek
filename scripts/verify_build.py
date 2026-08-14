@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 import time
 from pathlib import Path
 
@@ -360,6 +360,31 @@ print("\n-- API: /api/ask contract --")
 import app as app_module
 api = app_module.app.test_client()
 
+print("\n-- Audit fixes: path gates + input hardening --")
+_outside_ask_dir = Path(tempfile.mkdtemp(prefix="fileseek_outside_ask_"))
+_outside_probe = _outside_ask_dir / "probe.txt"
+_outside_probe.write_text("outside the scan roots\n", encoding="utf-8")
+resp_ask_out = api.post("/api/ask", json={"path": str(_outside_probe)})
+check("ask 403 outside scan roots", resp_ask_out.status_code == 403, resp_ask_out.get_json()["error"])
+resp_more_out = api.post("/api/ask-more", json={"path": str(_outside_probe), "question": "q"})
+check("ask-more 403 outside scan roots", resp_more_out.status_code == 403, resp_more_out.get_json()["error"])
+resp_card_out = api.get("/api/file-card?path=" + str(_outside_probe))
+check("file-card 403 outside scan roots", resp_card_out.status_code == 403, resp_card_out.get_json()["error"])
+resp_search_empty = api.post("/api/search", json={"query": "   "})
+check("search empty query returns 200 with no results", resp_search_empty.status_code == 200 and resp_search_empty.get_json()["results"] == [])
+resp_search_bad = api.post("/api/search", json={"query": "resume", "limit": "banana"})
+check("search garbage limit tolerated", resp_search_bad.status_code == 200)
+resp_browse_bad = api.get("/api/browse?limit=banana")
+check("browse garbage limit tolerated", resp_browse_bad.status_code == 200)
+from modules.indexer.crawler import _is_excluded_dir as _crawler_excluded
+check("crawler excludes its own data dir", _crawler_excluded(str(config.INDEX_DIR)) and _crawler_excluded(str(config.INDEX_DIR / "fileseek.index")), str(config.INDEX_DIR))
+from modules.compare import platforms as _platforms_fix
+_audit_cmp_record = {"name": "x.pdf", "parent_folder": "t", "extension": ".pdf", "category": "document", "size": 10, "sensitive": False}
+check("compare links carry the typed question", "my%20typed%20question" in _platforms_fix.compare_links(_audit_cmp_record, "my typed question")[0]["url"])
+check("no .tmp leftovers after saves", not list(config.INDEX_DIR.glob("*.tmp")), str(list(config.INDEX_DIR.glob("*.tmp"))))
+_saved_scan_ask = list(config.SCAN_DIRS)
+config.apply_scan_dirs([ask_dir])
+
 resp_missing = api.post("/api/ask", json={"path": str(Path(ask_dir) / "nope.txt")})
 check("ask 404 for missing file", resp_missing.status_code == 404 and resp_missing.get_json()["ok"] is False)
 
@@ -578,6 +603,7 @@ if live_available:
 else:
     print("[SKIP] live Ollama smoke - Ollama not reachable; suite still green")
 
+config.apply_scan_dirs(_saved_scan_ask)
 import shutil
 shutil.rmtree(ask_dir, ignore_errors=True)
 shutil.rmtree(tmp_dir, ignore_errors=True)

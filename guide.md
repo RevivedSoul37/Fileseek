@@ -83,6 +83,11 @@ files too, since those get their meaning from what is around them.
   sensitive badge. It opens with an automatic first question and keeps the same
   folder-clue context. Use **← catalog** to go back.
 
+## Known limitations
+- Conversations are not saved: the inline Ask-More history and the `/chat` page
+  reset on refresh or re-render. By design in v1.2.0.
+- Windows-only for now (run.bat, Explorer integration).
+
 ## Compare with Cloud AI (☁, opt-in)
 From the Ask answer footer, the inline chat, or the full chat header, click
 **☁ Compare**. FileSeek opens **ChatGPT, Gemini, Claude and Perplexity** in new

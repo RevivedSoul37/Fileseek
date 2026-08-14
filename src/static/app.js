@@ -622,12 +622,14 @@ async function sendChat(panel, question) {
 async function compareWithCloud(btn) {
     const path = btn.dataset.path;
     if (!path) return;
+    const panel = btn.closest(".ask-panel");
+    const question = (panel && panel.dataset.askQuestion) || "";
     btn.disabled = true;
     try {
         const res = await fetch('/api/compare', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path })
+            body: JSON.stringify({ path, question })
         });
         const data = await res.json();
         if (!data.ok) {

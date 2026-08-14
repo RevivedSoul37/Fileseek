@@ -78,8 +78,6 @@ class Sync:
             self.changes_since_save += applied
             return applied
 
-    def needs_save(self):
-        return self.changes_since_save >= 10
 
     def mark_saved(self):
         self.changes_since_save = 0

@@ -4,7 +4,7 @@
 the index updates itself as files change, and a local AI can explain any file it
 finds. 100% local, 100% private.
 
-`13,526 files indexed` · `searches answer in 8–10 ms` · `0 bytes leave your machine`
+`13,526 files indexed` · `searches answer in 8–10 ms` · `your files never leave your machine`
 
 ![FileSeek — browse view](docs/assets/browse.png)
 
@@ -123,7 +123,8 @@ folder-clue context. **← catalog** walks back to the room.
 - [Ollama](https://ollama.com) running locally (`ollama serve`) with
   `ollama pull llama3:8b` and `ollama pull qwen2.5-coder`
 - When Ollama is down, search and the watcher are unaffected — Ask shows a
-  friendly “start Ollama” card, and binary files still answer instantly.
+  friendly “start Ollama” card. (Ask answers, including the instant metadata
+  summary for binary files, need Ollama reachable.)
 
 ---
 
@@ -145,8 +146,9 @@ That’s the whole ritual. Later runs load the saved index instantly.
 | Python 3.10+ | built and verified on 3.11.15 |
 | ~500 MB disk | index of 13.5k files ≈ 26 MB |
 | GPU | **not required** — CPU FAISS answers in <10 ms at this scale |
-| Internet | only for the one-time dependency install |
+| Internet | only for the one-time dependency install (the UI fetches its fonts from Google Fonts; searches/Ask never touch the network) |
 | Ollama | optional — only for Ask / Ask More (`llama3:8b`, `qwen2.5-coder`) |
+| Windows | `run.bat`, Explorer integration and the watcher are Windows-oriented |
 
 ## Scanned folders
 
@@ -200,7 +202,7 @@ right; the ranker now is too.
 compare URLs), fully offline with deterministic stubs.
 
 `python scripts/verify_build.py` is the human stamp-runner over the same
-helpers — **111 checks** against the live crawler/index:
+helpers — **120 checks** against the live crawler/index:
 
 | Area | Checks |
 |---|---|

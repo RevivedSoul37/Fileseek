@@ -1,4 +1,4 @@
-﻿import atexit
+import atexit
 import logging
 import os
 import signal
@@ -179,6 +179,8 @@ def api_file_card():
     path = request.args.get("path", "")
     if not path or not os.path.isfile(path):
         return jsonify({"ok": False, "error": "File not found - it may have been moved or deleted"}), 404
+    if not _is_within_scan_roots(path):
+        return jsonify({"ok": False, "error": "Refused - path is outside the scan roots"}), 403
     record = store.get_record(norm_key(path)) if store.is_ready() else None
     if record is None:
         record = build_record(path)
@@ -197,10 +199,16 @@ def api_search():
     scope = payload.get("scope", "files")
     if scope not in ("files", "contents", "both"):
         scope = "files"
-    limit = min(int(payload.get("limit") or config.MAX_RESULTS), 1000)
+    try:
+        limit = min(int(payload.get("limit") or config.MAX_RESULTS), 1000)
+    except (TypeError, ValueError):
+        limit = config.MAX_RESULTS
     if not store.is_ready():
         return jsonify({"results": [], "indexed": False, "query": query,
                         "total": 0, "category_counts": {}, "content_indexed": False})
+    if not query.strip():
+        return jsonify({"results": [], "indexed": True, "query": query,
+                        "total": 0, "category_counts": {}, "content_indexed": content_index.is_ready()})
     results, counts = engine.search(query, max_results=limit, category=category,
                                     scope=scope, content_index=content_index)
     return jsonify({"results": results, "indexed": True, "query": query,
@@ -212,7 +220,10 @@ def api_search():
 def api_browse():
     from modules.search.ranker import record_to_result
     category = request.args.get("category", "all")
-    limit = min(int(request.args.get("limit", 60)), 500)
+    try:
+        limit = min(int(request.args.get("limit", 60)), 500)
+    except (TypeError, ValueError):
+        limit = 60
     if not store.is_ready():
         return jsonify({"results": [], "indexed": False, "total": 0})
     records = list(store.metadata.values())
@@ -261,6 +272,8 @@ def api_ask():
     question = payload.get("question", "")
     if not path or not os.path.isfile(path):
         return jsonify({"ok": False, "error": "File not found - it may have been moved or deleted"}), 404
+    if not _is_within_scan_roots(path):
+        return jsonify({"ok": False, "error": "Refused - path is outside the scan roots"}), 403
     record = store.get_record(norm_key(path)) if store.is_ready() else None
     if record is None:
         record = build_record(path)
@@ -292,6 +305,8 @@ def api_ask_more():
         history = []
     if not path or not os.path.isfile(path):
         return jsonify({"ok": False, "error": "File not found - it may have been moved or deleted"}), 404
+    if not _is_within_scan_roots(path):
+        return jsonify({"ok": False, "error": "Refused - path is outside the scan roots"}), 403
     record = store.get_record(norm_key(path)) if store.is_ready() else None
     if record is None:
         record = build_record(path)
@@ -320,6 +335,8 @@ def api_compare():
     question = payload.get("question", "")
     if not path or not os.path.isfile(path):
         return jsonify({"ok": False, "error": "File not found - it may have been moved or deleted"}), 404
+    if not _is_within_scan_roots(path):
+        return jsonify({"ok": False, "error": "Refused - path is outside the scan roots"}), 403
     record = store.get_record(norm_key(path)) if store.is_ready() else None
     if record is None:
         record = build_record(path)
@@ -502,4 +519,4 @@ if __name__ == "__main__":
     _install_signal_handlers()
     _apply_saved_settings()
     _auto_load_or_build()
-    app.run(host=config.HOST, port=config.PORT, debug=False)
+    app.run(host=config.HOST, port=config.PORT, debug=False, threaded=True)
