@@ -154,7 +154,7 @@ async function browse(category) {
     }
 }
 
-async const ACTIVITY_ICONS = {
+const ACTIVITY_ICONS = {
     created: '📄',
     modified: '✏️',
     deleted: '🗑️',
