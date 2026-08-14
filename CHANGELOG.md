@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Phase 5: Ask reads real PDF/DOCX contents. `content_reader.py` branches on
+  extension — `pypdf` page text for `.pdf`, `python-docx` paragraphs for `.docx`,
+  both capped at `ASK_MAX_CHARS` with the existing `[showing first ~N KB]` marker;
+  unreadable/corrupt files fall back to the binary metadata summary.
+- Prompt note for machine-extracted text (`EXTRACTED_TEXT_NOTE`) so the model
+  knows pagination/OCR may be imperfect.
+- New pinned dependencies: `pypdf==6.16.1`, `python-docx==1.2.0`.
 - Phase 4, Compare Mode A: `modules/compare/platforms.py` builds opt-in
   redirect URLs for ChatGPT / Gemini / Claude / Perplexity; payload = file
   name/type/size + question only, content never leaves the machine.

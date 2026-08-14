@@ -25,6 +25,13 @@ DOC_SUMMARIZER = (
 
 DOC_EXTENSIONS = {".md", ".txt", ".log"}
 
+EXTRACTED_EXTENSIONS = {".pdf", ".docx"}
+
+EXTRACTED_TEXT_NOTE = (
+    "Note: the text below was machine-extracted from a structured document; "
+    "pagination and formatting may be imperfect - read around missing pieces."
+)
+
 DEFAULT_QUESTION = "What is this file and what does it do?"
 
 ASK_MORE_QUESTION = "Tell me more about this file, using what sits in its folder as clues."
@@ -58,6 +65,8 @@ def build_prompt(record, content, question, truncated):
     ]
     if truncated:
         lines.append("Note: the file was too long, only the beginning is shown below.")
+    if (record.get("extension") or "").lower() in EXTRACTED_EXTENSIONS:
+        lines.append(EXTRACTED_TEXT_NOTE)
     lines.append("")
     lines.append("Question from the user: " + question)
     lines.append("")

@@ -28,6 +28,10 @@ plain-language explanation right on the card — no jargon, honest about unknown
 
 - **Code files** (`.py`, `.js`, `.ts`, etc.) are explained by `qwen2.5-coder`;
   everything else by `llama3:8b`.
+- **PDF and Word files** (`.pdf`, `.docx`) get their text extracted locally
+  (`pypdf` / `python-docx`) before the model reads them (Phase 5). Extraction is
+  capped like plain text (~8 KB); a corrupt or unreadable document falls back to
+  the metadata summary.
 - **Very large files** are read up to the first ~8 KB only; the answer panel notes
   when a file was truncated.
 - **Binary files** (images, videos, zips…) get an instant metadata summary
@@ -104,7 +108,7 @@ scan roots.
 2. ✅ Live file watcher — index updates itself in real time; cards show what changed
 3. ✅ Plain-language assistant — Ask button explains any file via local Ollama
 4. ✅ Compare with Cloud AI — opt-in ☁ second opinion (name/type/size only, never content)
-5. 🔜 Ask over PDF/DOCX contents (current Ask reads text/code/docs only)
+5. ✅ Ask over PDF/DOCX contents — `pypdf` + `python-docx` extraction feeds Ask
 
 ## Troubleshooting
 - **Search says "building your index…" for a long time** — first index of a large

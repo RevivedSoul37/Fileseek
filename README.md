@@ -88,6 +88,9 @@ honest about unknowns:
 
 - **Code files** (`.py`, `.js`, `.ts`…) go to `qwen2.5-coder`; everything else
   to `llama3:8b`.
+- **PDF and Word documents** (`.pdf`, `.docx`) get their text extracted locally
+  (`pypdf` / `python-docx`) and explained like real documents (Phase 5) — only
+  a corrupt file falls back to a metadata summary.
 - **Very large files** are read up to the first ~8 KB; the panel says so when a
   file was truncated.
 - **Binary files** (images, videos, archives…) get an instant metadata summary —
@@ -215,6 +218,7 @@ and a live tally counts your progress.
 | 3 · Plain-language assistant | **done** | local Ollama explains any file in your words |
 | 3.5 · Ask More + full chat | **done** | follow-up conversation with folder context, `/chat` page |
 | 4 · Compare with cloud AI | **done** | opt-in redirect (Mode A): ChatGPT/Gemini/Claude/Perplexity |
+| 5 · Ask over PDF/DOCX contents | **done** | `pypdf` / `python-docx` extraction feeds real document text to Ask |
 
 ### Compare — ☁ a second opinion, explicitly opt-in
 

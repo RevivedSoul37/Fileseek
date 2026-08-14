@@ -6,3 +6,5 @@ faiss-cpu==1.15.0  # was >=1.8
 sentence-transformers==5.7.0  # was >=3.0
 watchdog==6.0.0  # was >=4.0
 requests==2.34.2  # was >=2.31
+pypdf==6.16.1  # was >=4 (Phase 5: Ask over PDF contents)
+python-docx==1.2.0  # was >=1.1 (Phase 5: Ask over DOCX contents)

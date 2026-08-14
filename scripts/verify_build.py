@@ -220,6 +220,76 @@ blob_bin.write_bytes(b"\x89PNG\r\n\x1a\n" + bytes(range(256)) * 4)
 res_bin = read_for_ask(str(blob_bin))
 check("content_reader treats binary as binary", res_bin["kind"] == "binary" and res_bin["content"] is None)
 
+print("\n-- Phase 5: Ask over PDF/DOCX contents --")
+def build_minimal_pdf(text, path):
+    """Hand-rolled single-page PDF with one text line (no external libs)."""
+    objects = []
+    objects.append(b"<< /Type /Catalog /Pages 2 0 R >>")
+    objects.append(b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+    objects.append(b"<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /MediaBox [0 0 612 792] /Contents 5 0 R >>")
+    objects.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+    stream = f"BT /F1 12 Tf 72 712 Td ({text}) Tj ET".encode("latin-1")
+    objects.append(b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream")
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for i, obj in enumerate(objects, 1):
+        offsets.append(len(out))
+        out += str(i).encode() + b" 0 obj\n" + obj + b"\nendobj\n"
+    xref_pos = len(out)
+    out += b"xref\n0 " + str(len(objects) + 1).encode() + b"\n"
+    out += b"0000000000 65535 f \n"
+    for off in offsets:
+        out += f"{off:010d} 00000 n \n".encode()
+    out += b"trailer\n<< /Size " + str(len(objects) + 1).encode() + b" /Root 1 0 R >>\n"
+    out += b"startxref\n" + str(xref_pos).encode() + b"\n%%EOF\n"
+    Path(path).write_bytes(bytes(out))
+
+from docx import Document as DocxDocument
+
+smoke_pdf = Path(ask_dir) / "smoke.pdf"
+build_minimal_pdf("FileSeek pdf smoke text", str(smoke_pdf))
+res_pdf = read_for_ask(str(smoke_pdf))
+check("ask reads a pdf's extracted text", res_pdf["kind"] == "text" and "FileSeek pdf smoke text" in res_pdf["content"], repr(res_pdf.get("content"))[:60])
+
+smoke_docx = Path(ask_dir) / "smoke.docx"
+docx_doc = DocxDocument()
+docx_doc.add_paragraph("FileSeek docx smoke paragraph")
+docx_doc.save(str(smoke_docx))
+res_docx = read_for_ask(str(smoke_docx))
+check("ask reads a docx's extracted paragraphs", res_docx["kind"] == "text" and "FileSeek docx smoke paragraph" in res_docx["content"], repr(res_docx.get("content"))[:60])
+
+long_pdf_text = "quick brown fox jumps over the lazy dog. " * 500
+long_pdf = Path(ask_dir) / "long.pdf"
+build_minimal_pdf(long_pdf_text, str(long_pdf))
+res_long = read_for_ask(str(long_pdf))
+check("pdf text is capped with the truncation marker", res_long["truncated"] and res_long["content"].startswith("[showing first"), f"len={len(res_long['content'])}")
+
+corrupt_pdf = Path(ask_dir) / "corrupt.pdf"
+corrupt_pdf.write_bytes(b"%PDF-1.4\nnot really a pdf body\x00\x01\x02")
+res_corrupt = read_for_ask(str(corrupt_pdf))
+check("corrupt pdf falls back to binary", res_corrupt["kind"] == "binary", res_corrupt["kind"])
+
+pdf_record = {"name": "smoke.pdf", "path": str(smoke_pdf), "parent_folder": "asktest", "extension": ".pdf", "size": smoke_pdf.stat().st_size, "modified": time.time(), "category": "document", "sensitive": False}
+from modules.assistant.prompts import build_prompt as _build_prompt_pdf, EXTRACTED_TEXT_NOTE
+
+
+class _Stage3Stub:
+    def __init__(self):
+        self.last_prompt = None
+    def is_available(self):
+        return (True, [config.OLLAMA_MODEL])
+    def generate(self, prompt, system=None, model=None):
+        self.last_prompt = prompt
+        return "stub pdf answer"
+    def chat(self, messages, system=None, model=None):
+        return "stub chat"
+
+
+_pdf_stub = _Stage3Stub()
+pdf_result = Explainer(client=_pdf_stub).explain(pdf_record)
+check("pdf explain sends extracted content to the model", pdf_result["binary"] is False and "FileSeek pdf smoke text" in (_pdf_stub.last_prompt or ""), f"model={pdf_result['model']}")
+check("pdf prompt carries the extraction note", EXTRACTED_TEXT_NOTE in _build_prompt_pdf(pdf_record, "text", "q", False))
+
 print("\n-- Assistant: prompt selection --")
 check("prompt: code gets code_explainer", select_prompt("code", ".py") == CODE_EXPLAINER)
 check("prompt: markdown gets doc_summarizer", select_prompt("document", ".md") == DOC_SUMMARIZER)
