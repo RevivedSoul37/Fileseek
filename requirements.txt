@@ -1,5 +1,8 @@
-flask>=3.0
-faiss-cpu>=1.8
-sentence-transformers>=3.0
-watchdog>=4.0
-requests>=2.31
+# FileSeek runtime dependencies.
+# Exact pins verified in the project venv on 2026-08-14; the loose floors
+# used previously are kept as comments for reference.
+flask==3.1.3  # was >=3.0
+faiss-cpu==1.15.0  # was >=1.8
+sentence-transformers==5.7.0  # was >=3.0
+watchdog==6.0.0  # was >=4.0
+requests==2.34.2  # was >=2.31

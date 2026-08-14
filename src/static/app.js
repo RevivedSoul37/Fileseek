@@ -169,7 +169,7 @@ async function refreshStatus() {
         }
         progressText.textContent = data.progress && data.indexing ? data.progress : '';
         reindexBtn.disabled = !!data.indexing;
-        reindexBtn.textContent = data.indexing ? '⏳ Indexing…' : '🔄 Re-index';
+        reindexBtn.textContent = data.indexing ? '⏳ Indexing…' : '🔄 Refile everything';
         if (data.indexed && data.last_indexed) {
             indexInfo.textContent += ' · updated ' + timeAgo(data.last_indexed);
         }

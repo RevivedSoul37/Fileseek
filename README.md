@@ -4,7 +4,7 @@
 the index updates itself as files change, and a local AI can explain any file it
 finds. 100% local, 100% private.
 
-`13,489 files indexed` · `searches answer in 8–10 ms` · `0 bytes leave your machine`
+`13,526 files indexed` · `searches answer in 8–10 ms` · `0 bytes leave your machine`
 
 ![FileSeek — browse view](docs/assets/browse.png)
 

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- MIT `LICENSE` file.
+- `requirements.txt` now pins exact versions verified in the project venv
+  (loose floors kept as comments).
+
 ## [1.1.0] - 2026-08-14
 
 ### Added
