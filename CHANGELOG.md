@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-15
+
 ### Added
 - Content search / RAG (Stage 7, opt-in): `content_index.py` embeds ~500-char
   windows of text-category files ≤256 KB into a second `IndexIDMap`
