@@ -31,6 +31,13 @@ jobs:
           "semantic search smoke phrase alpha" | Set-Content (Join-Path $seed "alpha-notes.md") -Encoding UTF8
           "print('hello fileseek')" | Set-Content (Join-Path $seed "script.py") -Encoding UTF8
           "budget,spent,remaining" | Set-Content (Join-Path $seed "ledger.csv") -Encoding UTF8
+          # The verify suite's five semantic searches need name-matching
+          # files on a clean runner (search embeds name+folder+type).
+          New-Item -ItemType File -Force -Path (Join-Path $seed "Resume.pdf") | Out-Null
+          "video editing timeline notes" | Set-Content (Join-Path $seed "video_editing_timeline.mp4") -Encoding UTF8
+          "team,runs,wickets" | Set-Content (Join-Path $seed "cricket_data.csv") -Encoding UTF8
+          New-Item -ItemType File -Force -Path (Join-Path $seed "ChatGPT_Installer.exe") | Out-Null
+          "print('python script seed')" | Set-Content (Join-Path $seed "python_backup_script.py") -Encoding UTF8
 
       - name: Unit tests (pytest)
         run: python -m pytest tests/ -q
