@@ -92,18 +92,18 @@ class ContentIndex:
 
     @property
     def ready(self):
-        return self.enabled and self.index is not None
+        """Accepting writes: the feature flag is on. Use is_ready() when you
+        need actual vectors to search."""
+        return self.enabled
 
     def is_ready(self):
-        return self.ready and self.index.ntotal > 0
+        return self.ready and self.index is not None and self.index.ntotal > 0
 
     def set_enabled(self, enabled):
         with self.lock:
             self.enabled = bool(enabled)
-            if enabled and self.index is None:
-                self._fresh_index()
 
-    def _fresh_index(self, dim=384):
+    def _fresh_index(self, dim):
         self.dim = dim
         flat = faiss.IndexFlatIP(dim)
         self.index = faiss.IndexIDMap(flat)
@@ -129,8 +129,8 @@ class ContentIndex:
             return 0
         embeddings = embedder.embed_texts(chunks, batch_size=32, show_progress=False)
         with self.lock:
-            if self.dim is None:
-                self.dim = int(embeddings.shape[1])
+            if self.index is None or self.dim != int(embeddings.shape[1]):
+                self._fresh_index(int(embeddings.shape[1]))
             ids = np.arange(self._next_id(), self._next_id() + len(chunks), dtype="int64")
             self.index.add_with_ids(embeddings, ids)
             for chunk_id, chunk in zip(ids, chunks):
@@ -150,7 +150,8 @@ class ContentIndex:
         if not self.ready:
             return 0, 0
         with self.lock:
-            self._fresh_index(self.dim or 384)
+            if self.dim:
+                self._fresh_index(self.dim)
         records = list(store.metadata.values())
         total = len(records)
         files_with_chunks = 0

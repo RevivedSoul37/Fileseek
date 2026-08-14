@@ -195,18 +195,28 @@ right; the ranker now is too.
 
 ## Verification
 
-`scripts/verify_build.py` runs the full suite — **58 checks stamped**
-(60 with the live Ollama smoke test), covering:
+`venv\Scripts\python.exe -m pytest tests/ -q` — **23 fast unit tests**
+(utils, chunking, content index cycle, search scopes, activity ring,
+compare URLs), fully offline with deterministic stubs.
+
+`python scripts/verify_build.py` is the human stamp-runner over the same
+helpers — **111 checks** against the live crawler/index:
 
 | Area | Checks |
 |---|---|
 | Utils, crawler, embeddings, index build/reload | PASSED |
 | 5 semantic searches, 8–10 ms each | PASSED |
-| Incremental add / remove (the watcher’s engine) | PASSED |
+| Incremental add / remove (the watcher's engine) | PASSED |
 | Category filters | PASSED |
 | Watcher: snapshots, line-diffs, sync into the index, API surface | PASSED |
+| Graceful shutdown saves state; open-path validation (403s) | PASSED |
 | Ask: content reader, prompt routing, model routing, API contract (404/200/503) | PASSED |
+| Phase 5: PDF/DOCX text extraction, truncation, corrupt fallback | PASSED |
 | Ask More: folder context, history trimming, API contract | PASSED |
+| Activity feed: create→modify→delete ring, cap, restart survival, API | PASSED |
+| Settings: persistence, 400 rejections, live SCAN_DIRS mutation | PASSED |
+| Content search: planted phrase, snippets, incremental edit/delete | PASSED |
+| Compare Mode A: four URL builders, encoding, no content leakage | PASSED |
 | Live Ollama smoke test (ask + ask-more) | PASSED when Ollama is up, auto-skipped otherwise |
 
 A human-readable **field test protocol** was authored alongside this build —
