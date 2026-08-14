@@ -87,6 +87,14 @@ and the payload is **only the file's name, type and size plus your question**:
 the file's *content never leaves the machine*. Sensitive files prompt an extra
 confirmation. Compare needs no Ollama and no index entry.
 
+## Activity feed (🕘)
+The **🕘 Activity** button in the ledger bar slides open the daybook — a live,
+newest-first feed of everything the watcher has applied: created / modified /
+deleted / moved entries, with the change-diff stamp (lines added/removed) where
+one exists. The feed polls within the normal 4 s status cycle only while the
+drawer is open, is capped at 200 entries, and survives restarts via
+`data/activity.json`.
+
 ## Indexing
 - The index builds automatically on first launch (scans Downloads, Documents, Desktop).
 - The status bar shows file count and when the index was last built.

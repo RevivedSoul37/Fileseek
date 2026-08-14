@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Activity feed (finishes the Phase 2 promise): a capped 200-entry ring
+  (`modules/watcher/activity_log.py`) persisted to `data/activity.json`;
+  `sync.py` appends one entry per applied watcher event (create/modify/delete/
+  move/move-dir, with the diff stamp); `GET /api/activity?limit=` serves it
+  newest-first; new **🕘 Activity** ledger toggle opens a side drawer that
+  polls within the existing 4 s status cycle only while open.
 - Ask's first question can be typed: the panel opens with an input row
   (*ask in your own words…*); empty falls back to the default question, and
   the typed question round-trips into the answer footer and the Ask More seed.

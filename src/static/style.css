@@ -449,6 +449,56 @@ body {
 }
 .stamp-btn:hover { border-color: var(--brass); color: var(--brass); }
 .stamp-btn:disabled { opacity: .4; cursor: not-allowed; }
+.stamp-btn.active { border-color: var(--brass); color: var(--brass); }
+
+/* ── Activity drawer — the daybook slipped out from the right ── */
+.activity-drawer {
+    position: fixed; top: 0; right: 0; bottom: 0;
+    width: min(380px, 92vw);
+    background: var(--drawer);
+    border-left: 1px solid var(--rail);
+    box-shadow: -14px 0 40px rgba(0,0,0,.5);
+    display: flex; flex-direction: column;
+    z-index: 90;
+    animation: drawer-in .22s ease both;
+}
+@keyframes drawer-in { from { transform: translateX(26px); opacity: 0; } to { transform: none; opacity: 1; } }
+.activity-drawer-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px 10px; border-bottom: 1px solid var(--rail);
+}
+.activity-drawer-title {
+    font-family: var(--font-display); font-weight: 650; font-size: 17px;
+    color: var(--paper);
+}
+.activity-list { flex: 1; overflow-y: auto; padding: 8px 10px 12px; }
+.activity-empty {
+    font-size: 12.5px; font-style: italic; color: var(--chalk-faint);
+    padding: 26px 10px; text-align: center; line-height: 1.65;
+}
+.activity-row {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 8px 6px; border-bottom: 1px dashed rgba(169,191,175,.14);
+}
+.activity-icon { font-size: 14px; line-height: 1.4; flex-shrink: 0; }
+.activity-body { flex: 1; min-width: 0; }
+.activity-name {
+    font-size: 12.5px; color: var(--paper); line-height: 1.45;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.activity-diff {
+    display: block; font-family: var(--font-mono); font-size: 10px;
+    color: var(--brass-dim); margin-top: 2px;
+}
+.activity-when {
+    font-family: var(--font-mono); font-size: 10px; color: var(--chalk-faint);
+    white-space: nowrap; padding-top: 2px;
+}
+.activity-note {
+    border-top: 1px solid var(--rail); padding: 9px 16px;
+    font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .05em;
+    text-transform: uppercase; color: var(--chalk-faint); text-align: center;
+}
 
 /* ── Toast ──────────────────────────────────────────── */
 .toast {

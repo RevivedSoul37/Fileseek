@@ -7,6 +7,10 @@ const progressText = document.getElementById('progress-text');
 const reindexBtn = document.getElementById('reindex-btn');
 const toastEl = document.getElementById('toast');
 const filterButtons = document.querySelectorAll('.filter-btn');
+const activityBtn = document.getElementById('activity-btn');
+const activityDrawer = document.getElementById('activity-drawer');
+const activityList = document.getElementById('activity-list');
+const activityClose = document.getElementById('activity-close');
 
 let currentCategory = 'all';
 const CAT_LABELS = {
@@ -144,6 +148,64 @@ async function browse(category) {
     }
 }
 
+async const ACTIVITY_ICONS = {
+    created: '📄',
+    modified: '✏️',
+    deleted: '🗑️',
+    moved: '➡️',
+    moved_dir: '📁➡️'
+};
+
+function activityRowHtml(entry) {
+    const icon = ACTIVITY_ICONS[entry.kind] || '•';
+    const when = timeAgo(entry.ts);
+    let detail = escapeHtml(entry.name || '');
+    if (entry.kind === 'moved' || entry.kind === 'moved_dir') {
+        detail = escapeHtml((entry.from || '?') + ' → ' + (entry.to || entry.name || '?'));
+    }
+    const diff = entry.diff_summary
+        ? `<span class="activity-diff">✏️ ${escapeHtml(entry.diff_summary)}</span>`
+        : '';
+    return `
+        <div class="activity-row">
+            <span class="activity-icon">${icon}</span>
+            <div class="activity-body">
+                <div class="activity-name" title="${escapeHtml(entry.name || '')}">${detail}</div>
+                ${diff}
+            </div>
+            <span class="activity-when">${when}</span>
+        </div>`;
+}
+
+async function loadActivity() {
+    try {
+        const res = await fetch('/api/activity?limit=60');
+        const data = await res.json();
+        if (!data.ok) return;
+        if (!data.entries || data.entries.length === 0) {
+            activityList.innerHTML = `<div class="activity-empty">Nothing logged yet — make a change in a watched folder and it lands here.</div>`;
+            return;
+        }
+        activityList.innerHTML = data.entries.map(activityRowHtml).join('');
+    } catch (e) {
+        activityList.innerHTML = `<div class="activity-empty">Could not load activity — is the server running?</div>`;
+    }
+}
+
+function toggleActivityDrawer(forceOpen) {
+    const opening = forceOpen !== undefined ? forceOpen : activityDrawer.hidden;
+    activityDrawer.hidden = !opening;
+    if (opening) {
+        loadActivity();
+        activityBtn.classList.add('active');
+    } else {
+        activityBtn.classList.remove('active');
+    }
+}
+
+activityBtn.addEventListener('click', () => toggleActivityDrawer());
+activityClose.addEventListener('click', () => toggleActivityDrawer(false));
+
 async function refreshStatus() {
     try {
         const res = await fetch('/api/status');
@@ -182,7 +244,9 @@ async function refreshStatus() {
         }
     } catch (e) {
         setPill('server offline', 'error');
+        return;
     }
+    if (!activityDrawer.hidden) loadActivity();
 }
 
 function showEmptyState() {
@@ -324,6 +388,7 @@ function askAboutFile(btn) {
     const card = btn.closest('.result-card');
     const panel = card ? card.querySelector('.ask-panel') : null;
     if (!panel) return;
+    if (!panel.hidden && panel.dataset.state === 'loading') return;
     if (!panel.hidden && panel.dataset.state === 'done') {
         panel.hidden = true;
         panel.dataset.state = '';

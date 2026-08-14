@@ -62,10 +62,20 @@
         </div>
         <div class="ledger-right">
             <span id="progress-text" class="progress-text"></span>
+            <button id="activity-btn" class="stamp-btn">🕘 Activity</button>
             <button id="reindex-btn" class="stamp-btn">🔄 Refile everything</button>
         </div>
     </footer>
 </div>
+
+<aside id="activity-drawer" class="activity-drawer" hidden>
+    <div class="activity-drawer-head">
+        <span class="activity-drawer-title">🕘 Recent activity</span>
+        <button id="activity-close" class="ask-close" title="Close the activity drawer">✕</button>
+    </div>
+    <div id="activity-list" class="activity-list"></div>
+    <div class="activity-note">capped at 200 entries · saved in data/activity.json</div>
+</aside>
 
 <div id="toast" class="toast"></div>
 

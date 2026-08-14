@@ -347,6 +347,16 @@ def api_open_folder():
     return jsonify({"ok": True})
 
 
+@app.route("/api/activity", methods=["GET"])
+def api_activity():
+    try:
+        limit = min(max(int(request.args.get("limit", config.ACTIVITY_DEFAULT_LIMIT)), 1), config.ACTIVITY_MAX_ENTRIES)
+    except (TypeError, ValueError):
+        limit = config.ACTIVITY_DEFAULT_LIMIT
+    entries = watcher.activity.newest_first(limit)
+    return jsonify({"ok": True, "entries": entries, "total": len(entries)})
+
+
 @app.route("/api/config", methods=["GET"])
 def api_config():
     return jsonify({

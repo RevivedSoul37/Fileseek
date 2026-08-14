@@ -6,6 +6,8 @@ data/fileseek.index
 data/metadata.json
 data/snapshots.json
 data/snapshots.json.tmp
+data/activity.json
+data/activity.json.tmp
 
 # Python
 __pycache__/

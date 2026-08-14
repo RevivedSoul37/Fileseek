@@ -15,10 +15,11 @@ class Sync:
     embeddings are built from name+folder+type, which content edits do not
     change), while creates, moves and renames re-embed as needed."""
 
-    def __init__(self, store, embedder, snapshots):
+    def __init__(self, store, embedder, snapshots, activity=None):
         self.store = store
         self.embedder = embedder
         self.snapshots = snapshots
+        self.activity = activity
         self.lock = threading.Lock()
         self.changes_since_save = 0
 
@@ -26,18 +27,41 @@ class Sync:
         text = self.embedder.build_text(record)
         return self.embedder.embed_query(text)
 
+    def _activity_entry(self, event):
+        """One feed entry per applied event. `from`/`to` only appear on moves;
+        `diff_summary` only when the index recorded one."""
+        etype = event["type"]
+        path = event.get("path", "")
+        entry = {"kind": etype, "name": os.path.basename(path) or path}
+        if etype in ("moved", "moved_dir"):
+            src = event.get("src_path", "")
+            if etype == "moved_dir":
+                entry["name"] = os.path.basename(event.get("path", "")) or event.get("path", "")
+            entry["from"] = os.path.basename(src) or src
+            entry["to"] = os.path.basename(path) or path
+        if etype == "modified":
+            record = self.store.get_record(norm_key(path))
+            if record and record.get("last_diff_summary"):
+                entry["diff_summary"] = record["last_diff_summary"]
+        return entry
+
     def handle_batch(self, batch):
         if not batch:
             return 0
         with self.lock:
             applied = 0
+            feed = []
             for event in batch:
                 try:
                     if self._apply(event):
                         applied += 1
+                        if self.activity is not None:
+                            feed.append(self._activity_entry(event))
                 except Exception as exc:
                     log.warning("Sync event failed (%s %s): %s",
                                 event.get("type"), event.get("path"), exc)
+            if self.activity is not None and feed:
+                self.activity.append_batch(feed)
             self.changes_since_save += applied
             return applied
 

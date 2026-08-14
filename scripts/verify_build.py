@@ -137,9 +137,41 @@ print("\n-- record_to_result exposes diff fields --")
 result = record_to_result(rec)
 check("API result carries last_diff_summary", result.get("last_diff_summary") == "2 lines added \u00b7 1 line removed")
 
+print("\n-- Activity feed: ring, cap, persistence --")
+from modules.watcher.activity_log import ActivityLog
+import shutil as _shutil
+
+activity_dir = tempfile.mkdtemp(prefix="fileseek_activity_test_")
+activity_path = Path(activity_dir) / "activity.json"
+
+act = ActivityLog(path=activity_path, max_entries=3)
+act.append({"kind": "created", "name": "a.txt"})
+act.append({"kind": "modified", "name": "a.txt", "diff_summary": "1 line added \u00b7 1 line removed"})
+act.append({"kind": "deleted", "name": "a.txt"})
+act.append({"kind": "created", "name": "b.txt"})
+check("activity cap drops the oldest", len(act.entries) == 3 and act.entries[0]["kind"] == "modified" and act.entries[-1]["name"] == "b.txt", str([(e["kind"], e["name"]) for e in act.entries]))
+act.save()
+check("activity.json written", activity_path.exists(), str(activity_path.name))
+act2 = ActivityLog(path=activity_path, max_entries=3)
+act2.load()
+check("activity survives restart", len(act2.entries) == 3 and act2.newest_first(1)[0]["name"] == "b.txt", str([e["name"] for e in act2.entries]))
+
+_activity_store = IndexStore()
+_activity_store.build({fake_key: fake_record}, embedder.embed_query("testfile xyz").reshape(1, -1))
+_activity_snap = SnapshotStore(path=Path(activity_dir) / "snaps.json")
+_activity_sync = Sync(_activity_store, embedder, _activity_snap, act2)
+feed_file = Path(activity_dir) / "feed.txt"
+feed_file.write_text("v1\n", encoding="utf-8")
+check("feed records a create", _activity_sync.handle_batch([{"type": "created", "path": str(feed_file)}]) == 1 and act2.entries[-1]["kind"] == "created", str(act2.entries[-1].get("kind")))
+_activity_snap.put(str(feed_file), _activity_snap.snapshot_file(str(feed_file)))
+feed_file.write_text("v1\nv2\n", encoding="utf-8")
+check("feed records a modify", _activity_sync.handle_batch([{"type": "modified", "path": str(feed_file)}]) == 1 and act2.entries[-1]["kind"] == "modified", str(act2.entries[-1].get("kind")))
+feed_file.unlink()
+check("feed records a delete", _activity_sync.handle_batch([{"type": "deleted", "path": str(feed_file)}]) == 1 and act2.entries[-1]["kind"] == "deleted", str(act2.entries[-1].get("kind")))
+_shutil.rmtree(activity_dir, ignore_errors=True)
+
 print("\n-- Runtime: graceful shutdown saves state --")
 import modules.indexer.index_store as index_store_module
-import shutil as _shutil
 from modules.watcher import monitor as monitor_module
 from modules.watcher.monitor import WatcherService
 
@@ -392,6 +424,13 @@ check("compare 404 for missing file", resp_compare_missing.status_code == 404 an
 resp_compare_ok = api.post("/api/compare", json={"path": str(code_file), "question": "what does this do?"})
 data_compare = resp_compare_ok.get_json()
 check("compare 200 with four links", resp_compare_ok.status_code == 200 and data_compare.get("ok") and len(data_compare["links"]) == 4, str(data_compare.get("side_by_side")))
+
+print("\n-- API: activity feed contract --")
+resp_activity = api.get("/api/activity?limit=5")
+act_data = resp_activity.get_json()
+check("activity endpoint returns newest-first entries", resp_activity.status_code == 200 and act_data["ok"] is True and isinstance(act_data["entries"], list), str(act_data.get("total")))
+resp_activity_bad = api.get("/api/activity?limit=banana")
+check("activity limit falls back to default on bad input", resp_activity_bad.status_code == 200 and resp_activity_bad.get_json()["ok"] is True)
 
 print("\n-- Assistant: folder context --")
 from modules.assistant.folder_context import build_folder_context

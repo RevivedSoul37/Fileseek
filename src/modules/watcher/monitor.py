@@ -14,6 +14,7 @@ from ..core.config import (
     SCAN_DIRS,
     WATCH_SAVE_INTERVAL_SECONDS,
 )
+from .activity_log import ActivityLog
 from .event_queue import EventQueue
 from .snapshot_store import SnapshotStore
 from .sync import Sync
@@ -89,11 +90,13 @@ class WatcherService:
     start() schedules one recursive watch per scan dir; a daemon thread drains
     the queue and applies batches via Sync."""
 
-    def __init__(self, store, embedder, snapshot_path=None):
+    def __init__(self, store, embedder, snapshot_path=None, activity_path=None):
         self.store = store
         self.snapshots = SnapshotStore(snapshot_path)
+        self.activity = ActivityLog(activity_path)
+        self.activity.load()
         self.queue = EventQueue()
-        self.sync = Sync(store, embedder, self.snapshots)
+        self.sync = Sync(store, embedder, self.snapshots, self.activity)
         self.observer = None
         self._thread = None
         self._stop = threading.Event()
@@ -161,6 +164,7 @@ class WatcherService:
     def _save(self):
         self.store.save()
         self.snapshots.save()
+        self.activity.save()
 
     def _loop(self):
         last_save = time.monotonic()
