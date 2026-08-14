@@ -1,5 +1,7 @@
-﻿import logging
+﻿import atexit
+import logging
 import os
+import signal
 import subprocess
 import sys
 import threading
@@ -57,6 +59,55 @@ def _open_file(path):
         return True, ""
     except OSError as exc:
         return False, str(exc)
+
+
+def _is_within_scan_roots(path):
+    """True if `path` sits inside one of the configured scan roots, or is
+    already tracked in the index. Flask binds 127.0.0.1 only; this check makes
+    the open endpoints safe by construction rather than by luck."""
+    try:
+        resolved = os.path.realpath(path)
+    except OSError:
+        return False
+    for root in config.SCAN_DIRS:
+        root_resolved = os.path.realpath(root)
+        if resolved == root_resolved or resolved.startswith(root_resolved + os.sep):
+            return True
+    if store.is_ready() and store.get_record(norm_key(path)) is not None:
+        return True
+    return False
+
+
+_shutdown_done = threading.Event()
+
+
+def _graceful_shutdown(*args):
+    """Stop the watcher and save all state so nothing queued up in the last
+    30 s is lost. Safe to call multiple times (atexit + signal)."""
+    if _shutdown_done.is_set():
+        return
+    _shutdown_done.set()
+    if watcher.running:
+        log.info("Shutting down: stopping watcher and saving state...")
+        watcher.stop()
+    else:
+        try:
+            store.save()
+            watcher.snapshots.save()
+        except Exception:
+            log.exception("Shutdown save failed")
+
+
+def _install_signal_handlers():
+    signal.signal(signal.SIGINT, _sigint_handler)
+    if hasattr(signal, "SIGBREAK"):  # Windows console Ctrl+Break / close button
+        signal.signal(signal.SIGBREAK, _sigint_handler)
+    atexit.register(_graceful_shutdown)
+
+
+def _sigint_handler(signum, frame):
+    _graceful_shutdown()
+    os._exit(0 if signum == signal.SIGINT else 1)
 
 
 def _run_full_index():
@@ -252,6 +303,8 @@ def api_open_file():
     path = payload.get("path", "")
     if not path or not os.path.isfile(path):
         return jsonify({"ok": False, "error": "File not found"}), 404
+    if not _is_within_scan_roots(path):
+        return jsonify({"ok": False, "error": "Refused - path is outside the scan roots"}), 403
     ok, err = _open_file(path)
     return jsonify({"ok": ok, "error": err}), (200 if ok else 500)
 
@@ -263,8 +316,12 @@ def api_open_folder():
     if not path:
         return jsonify({"ok": False, "error": "No path given"}), 400
     if os.path.isfile(path):
+        if not _is_within_scan_roots(path):
+            return jsonify({"ok": False, "error": "Refused - path is outside the scan roots"}), 403
         _open_in_explorer(path)
     elif os.path.isdir(path):
+        if not _is_within_scan_roots(path):
+            return jsonify({"ok": False, "error": "Refused - path is outside the scan roots"}), 403
         subprocess.Popen(["explorer", os.path.normpath(path)])
     else:
         return jsonify({"ok": False, "error": "Path not found"}), 404
@@ -322,5 +379,6 @@ if __name__ == "__main__":
         input("Press Enter to close this window...")
         raise SystemExit(1)
     log.info("FileSeek starting on http://%s:%d", config.HOST, config.PORT)
+    _install_signal_handlers()
     _auto_load_or_build()
     app.run(host=config.HOST, port=config.PORT, debug=False)

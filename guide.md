@@ -87,6 +87,10 @@ Everything runs locally. Search embeddings, the watcher, and Ask all stay on thi
 machine — Ask talks only to `http://127.0.0.1:11434` (local Ollama), never the cloud.
 (The Phase 4 "Compare with Cloud AI" feature will be opt-in and clearly labeled.)
 
+**Security model:** the server binds to `127.0.0.1` only (no LAN/internet access),
+has no authentication by design, and refuses to open paths outside the configured
+scan roots.
+
 ## Phases (roadmap)
 1. ✅ Semantic search — meaning-based search over Downloads/Documents/Desktop
 2. ✅ Live file watcher — index updates itself in real time; cards show what changed

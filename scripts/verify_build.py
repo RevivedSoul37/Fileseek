@@ -137,6 +137,62 @@ print("\n-- record_to_result exposes diff fields --")
 result = record_to_result(rec)
 check("API result carries last_diff_summary", result.get("last_diff_summary") == "2 lines added \u00b7 1 line removed")
 
+print("\n-- Runtime: graceful shutdown saves state --")
+import modules.indexer.index_store as index_store_module
+import shutil as _shutil
+from modules.watcher import monitor as monitor_module
+from modules.watcher.monitor import WatcherService
+
+# The temp root must live outside junk dirs (tempfile's %TEMP% contains
+# 'AppData' which the watcher's junk filter drops on sight).
+verify_tmp_base = config.PROJECT_ROOT / "private" / ".verify_tmp"
+_shutil.rmtree(verify_tmp_base, ignore_errors=True)
+verify_tmp_base.mkdir(parents=True, exist_ok=True)
+shutdown_dir = tempfile.mkdtemp(prefix="fileseek_shutdown_test_", dir=str(verify_tmp_base))
+burst_file = Path(shutdown_dir) / "burst.txt"
+burst_file.write_text("line one\n", encoding="utf-8")
+
+_saved_store_paths = (index_store_module.INDEX_DIR, index_store_module.INDEX_PATH, index_store_module.METADATA_PATH)
+_saved_scan_dirs = monitor_module.SCAN_DIRS
+index_store_module.INDEX_DIR = Path(shutdown_dir)
+index_store_module.INDEX_PATH = Path(shutdown_dir) / "fileseek.index"
+index_store_module.METADATA_PATH = Path(shutdown_dir) / "metadata.json"
+monitor_module.SCAN_DIRS = [shutdown_dir]
+try:
+    from modules.indexer.crawler import build_record as _build_record
+    shut_store = IndexStore()
+    burst_record = _build_record(str(burst_file))
+    shut_store.build(
+        {norm_key(str(burst_file)): burst_record},
+        embedder.embed_query("burst file").reshape(1, -1),
+    )
+    shut_service = WatcherService(shut_store, embedder, snapshot_path=Path(shutdown_dir) / "snaps.json")
+    shut_service.snapshots.put(str(burst_file), shut_service.snapshots.snapshot_file(str(burst_file)))
+    check("watcher starts on temp root", shut_service.start())
+    time.sleep(1.0)  # let the Windows event backlog drain before the burst
+    burst_new = Path(shutdown_dir) / "burst_new.txt"
+    burst_new.write_text("created after watcher start\n", encoding="utf-8")
+    deadline = time.time() + 12
+    burst_rec = None
+    while time.time() < deadline:
+        burst_rec = shut_store.get_record(norm_key(str(burst_new)))
+        if burst_rec is not None:
+            break
+        time.sleep(0.2)
+    check("watcher applied a burst change within the window", burst_rec is not None, burst_rec.get("name") if burst_rec else "(missing)")
+    shut_index_path = Path(shutdown_dir) / "fileseek.index"
+    shut_meta_path = Path(shutdown_dir) / "metadata.json"
+    shut_snap_path = Path(shutdown_dir) / "snaps.json"
+    check("index not yet written before shutdown", not shut_index_path.exists(), "only the 30s periodic save would write it")
+    shut_service.stop()
+    check("watcher stop writes the index", shut_index_path.exists() and shut_meta_path.exists(), shut_index_path.name)
+    check("watcher stop writes snapshots", shut_snap_path.exists(), shut_snap_path.name)
+finally:
+    index_store_module.INDEX_DIR, index_store_module.INDEX_PATH, index_store_module.METADATA_PATH = _saved_store_paths
+    monitor_module.SCAN_DIRS = _saved_scan_dirs
+import shutil as _shutil
+_shutil.rmtree(shutdown_dir, ignore_errors=True)
+
 print("\n-- Assistant: shared decode + content reader --")
 from modules.core.utils import decode_excerpt
 check("decode_excerpt moved to core.utils (text round-trip)", decode_excerpt("h\u00e9llo world".encode("utf-8")) == "h\u00e9llo world")
@@ -221,6 +277,32 @@ class DownOllama:
 app_module.explainer.client = DownOllama()
 resp_down = api.post("/api/ask", json={"path": str(code_file)})
 check("ask 503 with friendly error when Ollama down", resp_down.status_code == 503 and "Ollama" in resp_down.get_json()["error"], resp_down.get_json()["error"])
+
+print("\n-- Runtime: /api/open/* path validation --")
+import os
+open_dir = tempfile.mkdtemp(prefix="fileseek_open_test_")
+open_inside = str(Path(config.SCAN_DIRS[0]) / "fileseek_open_probe.txt")
+Path(open_inside).write_text("probe\n", encoding="utf-8")
+open_outside = os.path.join(open_dir, "probe_outside.txt")
+Path(open_outside).write_text("outside\n", encoding="utf-8")
+_original_open_file = app_module._open_file
+app_module._open_file = lambda p: (True, "")
+try:
+    resp_file_ok = api.post("/api/open/file", json={"path": open_inside})
+    check("open file inside scan root allowed", resp_file_ok.status_code == 200, str(resp_file_ok.get_json()))
+    resp_file_out = api.post("/api/open/file", json={"path": open_outside})
+    check("open file outside scan roots 403", resp_file_out.status_code == 403, resp_file_out.get_json()["error"])
+    resp_folder_file_out = api.post("/api/open/folder", json={"path": open_outside})
+    check("open folder on outside file 403", resp_folder_file_out.status_code == 403, resp_folder_file_out.get_json()["error"])
+    resp_folder_dir_out = api.post("/api/open/folder", json={"path": open_dir})
+    check("open folder on outside dir 403", resp_folder_dir_out.status_code == 403, resp_folder_dir_out.get_json()["error"])
+finally:
+    app_module._open_file = _original_open_file
+    try:
+        os.remove(open_inside)
+    except OSError:
+        pass
+    _shutil.rmtree(open_dir, ignore_errors=True)
 
 print("\n-- Assistant: folder context --")
 from modules.assistant.folder_context import build_folder_context

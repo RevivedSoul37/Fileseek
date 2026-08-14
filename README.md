@@ -229,6 +229,10 @@ assembled in Python and only capped excerpts ever reach the model — which is
 also local. Nothing is uploaded, phoned home, or telemetered. Phase 4’s cloud
 comparison will be explicitly opt-in and clearly labeled.
 
+**Security model.** FileSeek binds to `127.0.0.1` only, has no authentication by
+design, and validates that open/file requests point inside a configured scan
+root (or the index) before touching the shell.
+
 ---
 
 ## Design notes

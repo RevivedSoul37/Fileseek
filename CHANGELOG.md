@@ -8,9 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- MIT `LICENSE` file.
-- `requirements.txt` now pins exact versions verified in the project venv
-  (loose floors kept as comments).
+- MIT `LICENSE` file; `requirements.txt` pinned to exact venv versions (loose
+  floors kept as comments).
+- Graceful shutdown: Ctrl+C / console close stops the watcher and saves the
+  index and snapshots immediately instead of waiting for the 30 s interval.
+- Security model documented (localhost bind, path validation, no auth by design)
+  in README and guide.
+
+### Security
+- `/api/open/file` and `/api/open/folder` now validate that the requested
+  path is inside a scan root (or already indexed) before opening — 403 outside.
+
+### Fixed
+- README stat drift (`13,489` vs live index) and the reindex button label
+  overwrite in `app.js` (now keeps `🔄 Refile everything`).
+- Deleted stale local branch `brief-caption`.
 
 ## [1.1.0] - 2026-08-14
 
