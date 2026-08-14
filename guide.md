@@ -6,6 +6,10 @@ dependencies (needs internet once). After that, it opens http://127.0.0.1:7860
 in your browser automatically.
 
 ## Searching
+- **Scope toggle** (appears once the content index is enabled and built):
+  `names` searches file name/folder/type as before; `inside files` searches
+  the text of text-like files (≤256 KB) and shows the matching snippet under
+  the card path; `both` merges the two with snippets where applicable.
 - Press `Ctrl+K` anywhere to jump to the search bar.
 - Search by **meaning**: typing `resume` finds `CV.pdf`, typing `video editing`
   finds `.mp4` files and workflow JSONs.

@@ -15,17 +15,30 @@ class Sync:
     embeddings are built from name+folder+type, which content edits do not
     change), while creates, moves and renames re-embed as needed."""
 
-    def __init__(self, store, embedder, snapshots, activity=None):
+    def __init__(self, store, embedder, snapshots, activity=None, content_index=None):
         self.store = store
         self.embedder = embedder
         self.snapshots = snapshots
         self.activity = activity
+        self.content_index = content_index
         self.lock = threading.Lock()
         self.changes_since_save = 0
 
     def _embed_one(self, record):
         text = self.embedder.build_text(record)
         return self.embedder.embed_query(text)
+
+    def _content_upsert(self, record):
+        """Keep the content index in step with the name index (no-op when the
+        feature flag is off: ContentIndex.ready stays False)."""
+        if self.content_index is None or not self.content_index.ready:
+            return False
+        return bool(self.content_index.index_file(norm_key(record["path"]), record, self.embedder))
+
+    def _content_remove(self, path):
+        if self.content_index is None or not self.content_index.ready:
+            return False
+        return self.content_index.remove_file(norm_key(path))
 
     def _activity_entry(self, event):
         """One feed entry per applied event. `from`/`to` only appear on moves;
@@ -96,6 +109,7 @@ class Sync:
         embedding = self._embed_one(record)
         added = self.store.add_or_update(norm_key(path), record, embedding)
         if added:
+            self._content_upsert(record)
             log.info("watcher +  %s", record["name"])
         return added
 
@@ -143,18 +157,22 @@ class Sync:
         updated = self.store.update_record(key, record)
         if updated:
             self.snapshots.put(path, new_snapshot)
+            if diff_fields.get("last_diff_kind") == "text":
+                self._content_upsert(record)
             log.info("watcher ~  %s (%s)", record["name"], diff_fields.get("last_diff_kind"))
         else:
             embedding = self._embed_one(record)
             updated = self.store.add_or_update(key, record, embedding)
             if updated:
                 self.snapshots.put(path, new_snapshot)
+                self._content_upsert(record)
         return updated
 
     def _handle_deleted(self, event):
         path = event["path"]
         removed = self.store.remove(norm_key(path))
         self.snapshots.remove(path)
+        self._content_remove(path)
         if removed:
             log.info("watcher -  %s", os.path.basename(path))
         return removed
@@ -178,6 +196,8 @@ class Sync:
         added = self.store.add_or_update(norm_key(dest_path), record, embedding)
         self.snapshots.rename(src_path, dest_path)
         if added:
+            if self.content_index is not None and self.content_index.ready:
+                self.content_index.rename_file(src_key, norm_key(dest_path), record, self.embedder)
             log.info("watcher -> %s", record["name"])
         return added
 
@@ -203,6 +223,7 @@ class Sync:
             embedding = self._embed_one(record)
             self.store.remove(norm_key(path))
             if self.store.add_or_update(norm_key(new_path), record, embedding):
+                self._content_upsert(record)
                 applied += 1
         renamed = self.snapshots.rename_prefix(src_dir, dest_dir)
         if applied:

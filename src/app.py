@@ -41,7 +41,11 @@ store = IndexStore()
 embedder = Embedder(config.EMBED_MODEL_NAME)
 engine = SearchEngine(store, embedder)
 
+from modules.indexer.content_index import ContentIndex
+content_index = ContentIndex()
+
 watcher = WatcherService(store, embedder)
+watcher.sync.content_index = content_index
 
 explainer = Explainer()
 
@@ -96,6 +100,8 @@ def _graceful_shutdown(*args):
             watcher.snapshots.save()
         except Exception:
             log.exception("Shutdown save failed")
+    if content_index.enabled:
+        content_index.save()
 
 
 def _install_signal_handlers():
@@ -143,6 +149,10 @@ def _run_full_index():
         store.build(records, embeddings)
         store.save()
         log.info("Index saved: %d vectors -> %s", store.index.ntotal, config.INDEX_PATH)
+        if content_index.enabled:
+            index_state["progress"] = "Indexing file contents…"
+            files_c, chunks_c = content_index.build_from_store(store, embedder)
+            log.info("Content index built: %d files, %d chunks", files_c, chunks_c)
         index_state["progress"] = f"Indexed {total} files at {time.strftime('%H:%M:%S')}"
         log.info("Index run complete: %d files in %.1fs", total, time.perf_counter() - started)
         _start_watcher_if_ready()
@@ -184,13 +194,18 @@ def api_search():
     payload = request.get_json(silent=True) or {}
     query = payload.get("query", "")
     category = payload.get("category", "all")
+    scope = payload.get("scope", "files")
+    if scope not in ("files", "contents", "both"):
+        scope = "files"
     limit = min(int(payload.get("limit") or config.MAX_RESULTS), 1000)
     if not store.is_ready():
         return jsonify({"results": [], "indexed": False, "query": query,
-                        "total": 0, "category_counts": {}})
-    results, counts = engine.search(query, max_results=limit, category=category)
+                        "total": 0, "category_counts": {}, "content_indexed": False})
+    results, counts = engine.search(query, max_results=limit, category=category,
+                                    scope=scope, content_index=content_index)
     return jsonify({"results": results, "indexed": True, "query": query,
-                    "total": counts["total"], "category_counts": counts["categories"]})
+                    "total": counts["total"], "category_counts": counts["categories"],
+                    "content_indexed": content_index.is_ready()})
 
 
 @app.route("/api/browse", methods=["GET"])
@@ -366,6 +381,8 @@ def api_config():
         "max_results": config.MAX_RESULTS,
         "embed_model": config.EMBED_MODEL_NAME,
         "sensitive_markers": list(config.SENSITIVE_NAME_MARKERS),
+        "content_index_enabled": content_index.enabled,
+        "content_index": content_index.stats(),
     })
 
 
@@ -398,21 +415,30 @@ def _validate_scan_dirs(dirs):
 def api_config_update():
     with index_lock:
         if index_state["running"]:
-            return jsonify({"ok": False, "error": "Cannot change scan dirs while an index run is in progress"}), 409
+            return jsonify({"ok": False, "error": "Cannot change settings while an index run is in progress"}), 409
     payload = request.get_json(silent=True) or {}
     cleaned, error = _validate_scan_dirs(payload.get("scan_dirs"))
     if error:
         return jsonify({"ok": False, "error": error}), 400
     settings = config.load_settings()
     settings["scan_dirs"] = cleaned
+    content_flag = payload.get("content_index_enabled")
+    if content_flag is not None:
+        settings["content_index_enabled"] = bool(content_flag)
     config.save_settings(settings)
     config.apply_scan_dirs(cleaned)
+    content_enabled = bool(settings.get("content_index_enabled"))
+    if content_enabled:
+        content_index.set_enabled(True)
+    else:
+        content_index.set_enabled(False)
     if watcher.running:
         watcher.stop()
-    log.info("Scan dirs updated to %d folder(s) - full re-index requested", len(cleaned))
+    log.info("Scan dirs updated to %d folder(s), content index %s - full re-index requested",
+             len(cleaned), "on" if content_enabled else "off")
     thread = threading.Thread(target=_run_full_index, daemon=True)
     thread.start()
-    return jsonify({"ok": True, "scan_dirs": cleaned})
+    return jsonify({"ok": True, "scan_dirs": cleaned, "content_index_enabled": content_enabled})
 
 
 def _start_watcher_if_ready():
@@ -428,12 +454,19 @@ def _start_watcher_if_ready():
 def _apply_saved_settings():
     """Refresh the scan roots from data/settings.json before anything scans.
     Roots that vanished from disk fall back so the catalog never starts
-    against an empty room."""
+    against an empty room. Also applies the content-index flag."""
     settings = config.load_settings()
     dirs = [d for d in (settings.get("scan_dirs") or []) if os.path.isdir(d)]
     if not dirs:
         dirs = list(config.DEFAULT_SCAN_DIRS)
     config.apply_scan_dirs(dirs)
+    content_enabled = bool(settings.get("content_index_enabled"))
+    if content_enabled and content_index.load():
+        stats = content_index.stats()
+        log.info("Content index loaded: %d chunks over %d files", stats["chunks"], stats["files"])
+    content_index.set_enabled(content_enabled)
+    if content_enabled and not content_index.is_ready():
+        log.info("Content index enabled but empty - will build with the next full index")
     log.info("Scan roots: %s", ", ".join(dirs))
 
 

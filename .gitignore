@@ -10,6 +10,9 @@ data/activity.json
 data/activity.json.tmp
 data/settings.json
 data/settings.json.tmp
+data/content.index
+data/content_meta.json
+data/content_meta.json.tmp
 
 # Python
 __pycache__/

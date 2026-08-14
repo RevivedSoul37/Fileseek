@@ -227,6 +227,16 @@ and a live tally counts your progress.
 | 3.5 · Ask More + full chat | **done** | follow-up conversation with folder context, `/chat` page |
 | 4 · Compare with cloud AI | **done** | opt-in redirect (Mode A): ChatGPT/Gemini/Claude/Perplexity |
 | 5 · Ask over PDF/DOCX contents | **done** | `pypdf` / `python-docx` extraction feeds real document text to Ask |
+| 6 · Content search (inside files) | **done, opt-in** | chunk embeddings (`names` / `inside files` / `both` scope) |
+
+### Searching *inside* files — opt-in
+
+Turn on **Index file contents too** under **⚙ Scanned folders**. FileSeek then
+embeds ~500-char windows of every text-like file ≤256 KB into a second FAISS
+index, and a scope toggle left of the search slot lets you search
+**names**, **inside files**, or **both** — inside-file hits show the matching
+snippet under the card path. Off by default so the 13k-file first build stays
+fast; the watcher keeps chunks fresh once enabled.
 
 ### Compare — ☁ a second opinion, explicitly opt-in
 

@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Content search / RAG (Stage 7, opt-in): `content_index.py` embeds ~500-char
+  windows of text-category files ≤256 KB into a second `IndexIDMap`
+  (`data/content.index` + `content_meta.json`); `SearchEngine.search()` gains
+  `scope=files|contents|both` with snippet-carrying cards; a scoped toggle
+  sits left of search. The watcher keeps chunks current on create/modify/
+  delete/move. Disabled by default behind the settings flag
+  `content_index_enabled`.
 - Settings UI + editable scan folders (removes the hardcoded SCAN_DIRS):
   `config.py` gains `load_settings()` / `save_settings()` / `apply_scan_dirs()`
   over `data/settings.json`; **⚙** masthead button opens a modal with

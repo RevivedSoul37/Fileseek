@@ -470,6 +470,70 @@ finally:
     config.SETTINGS_PATH = _saved_settings_path
     _shutil.rmtree(settings_test_dir, ignore_errors=True)
 
+print("\n-- Content search (RAG): scope, snippet, incremental --")
+from modules.indexer.content_index import ContentIndex, chunk_text
+from modules.indexer.crawler import build_record as _content_build_record
+from modules.search.engine import SearchEngine as _ContentEngine
+
+content_dir = tempfile.mkdtemp(prefix="fileseek_content_test_")
+content_root = os.path.join(content_dir, "notes")
+os.makedirs(content_root)
+planted_phrase = "quasar ledger reconciliation protocol"
+planted_file = Path(content_root) / "notes.md"
+planted_file.write_text(
+    "# Notes\n\nThe team follows the " + planted_phrase + " every quarter.\n"
+    + ("filler paragraph that says nothing new.\n" * 8),
+    encoding="utf-8",
+)
+
+check("chunk_text splits with overlap", all(len(c) <= config.CONTENT_CHUNK_CHARS + 1 for c in chunk_text("abc " * 900)), str([len(c) for c in chunk_text("abc " * 900)]))
+
+_content_store = IndexStore()
+_planted_record = _content_build_record(str(planted_file))
+_content_key = norm_key(str(planted_file))
+_content_store.build({_content_key: _planted_record}, embedder.embed_query("notes md").reshape(1, -1))
+
+ci = ContentIndex(index_path=Path(content_dir) / "content.index", meta_path=Path(content_dir) / "content_meta.json")
+ci.set_enabled(False)
+check("content index off by default rejects writes", ci.index_file(_content_key, _planted_record, embedder) == 0)
+ci.set_enabled(True)
+n_chunks = ci.index_file(_content_key, _planted_record, embedder)
+check("content index embeds a text file", n_chunks >= 1, f"{n_chunks} chunks")
+ci.save()
+check("content index persists (index + meta)", (Path(content_dir) / "content.index").exists() and (Path(content_dir) / "content_meta.json").exists())
+ci2 = ContentIndex(index_path=Path(content_dir) / "content.index", meta_path=Path(content_dir) / "content_meta.json")
+ci2.load()
+ci2.set_enabled(True)
+check("content index round-trips from disk", ci2.is_ready() and ci2.stats()["chunks"] == n_chunks, str(ci2.stats()))
+
+cengine = _ContentEngine(_content_store, embedder)
+q_planted = "quasar ledger reconciliation"
+res_contents, meta_contents = cengine.search(q_planted, scope="contents", content_index=ci2)
+check("planted phrase found in contents scope", len(res_contents) == 1 and res_contents[0]["name"] == "notes.md", res_contents[0]["name"] if res_contents else "(none)")
+check("contents result carries a snippet", bool(res_contents[0].get("snippet")) and planted_phrase[:20].split()[0] in res_contents[0]["snippet"].lower(), res_contents[0].get("snippet", "")[:50])
+res_files_only, meta_files = cengine.search(q_planted, scope="files", content_index=ci2)
+check("planted phrase is invisible in names-only scope", all(r.get("snippet") is None for r in res_files_only), f"{len(res_files_only)} results")
+res_both, _ = cengine.search(q_planted, scope="both", content_index=ci2)
+check("both scope surfaces the content hit", len(res_both) >= 1 and any(r.get("snippet") for r in res_both))
+res_names, _ = cengine.search("notes", scope="files", content_index=ci2)
+check("name search still works alongside content index", len(res_names) >= 1)
+
+# incremental: editing the file updates its chunks
+planted_file.write_text("# Notes\n\nBrand new galactic archive mandate.\n", encoding="utf-8")
+_planted_record2 = _content_build_record(str(planted_file))
+_content_store.update_record(_content_key, _planted_record2)
+ci2.index_file(_content_key, _planted_record2, embedder)
+res_after_edit, _ = cengine.search("galactic archive mandate", scope="contents", content_index=ci2)
+check("edit updates the content index", len(res_after_edit) == 1 and res_after_edit[0]["name"] == "notes.md", res_after_edit[0]["name"] if res_after_edit else "(none)")
+res_old_phrase, meta_old = cengine.search(q_planted, scope="contents", content_index=ci2)
+check("old phrase gone after edit", len(res_old_phrase) == 0, f"{len(res_old_phrase)} results")
+
+# removal: deleting the file removes its chunks
+ci2.remove_file(_content_key)
+res_after_delete, _ = cengine.search("galactic archive mandate", scope="contents", content_index=ci2)
+check("delete removes content chunks", len(res_after_delete) == 0 and ci2.stats()["chunks"] == 0, f"chunks={ci2.stats()['chunks']}")
+_shutil.rmtree(content_dir, ignore_errors=True)
+
 print("\n-- Assistant: folder context --")
 from modules.assistant.folder_context import build_folder_context
 ctx = build_folder_context(str(code_file))

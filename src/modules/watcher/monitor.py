@@ -165,6 +165,9 @@ class WatcherService:
         self.store.save()
         self.snapshots.save()
         self.activity.save()
+        content = self.sync.content_index
+        if content is not None and content.enabled:
+            content.save()
 
     def _loop(self):
         last_save = time.monotonic()

@@ -13,6 +13,8 @@ const activityList = document.getElementById('activity-list');
 const activityClose = document.getElementById('activity-close');
 
 let currentCategory = 'all';
+let currentScope = 'files';
+let contentIndexed = false;
 const CAT_LABELS = {
     all: 'everything', document: 'paper', image: 'pictures', media: 'film & sound',
     code: 'code', data: 'data', archive: 'bundles', other: 'unfiled'
@@ -93,6 +95,9 @@ function resultCard(r) {
         : '';
     const semanticInfo = r.semantic_percent != null ? ' · semantic ' + r.semantic_percent + '%' : '';
     const diffLine = diffSummaryLine(r);
+    const snippetLine = r.snippet
+        ? `<div class="result-snippet" title="${escapeHtml(r.snippet)}">📄 ${escapeHtml(r.snippet)}</div>`
+        : '';
     return `
     <div class="result-card">
         <div class="result-icon">${r.icon}</div>
@@ -103,6 +108,7 @@ function resultCard(r) {
             </div>
             <div class="result-path" title="${escapeHtml(r.path)}">${escapeHtml(r.path)}</div>
             <div class="result-meta">${r.parent_folder ? escapeHtml(r.parent_folder) + ' · ' : ''}${r.size_display} · ${r.modified_display}${semanticInfo}</div>
+            ${snippetLine}
             ${diffLine}
         </div>
         <div class="result-actions">
@@ -215,7 +221,19 @@ const settingsAddForm = document.getElementById('settings-add-form');
 const settingsAddInput = document.getElementById('settings-add-input');
 const settingsError = document.getElementById('settings-error');
 const settingsSave = document.getElementById('settings-save');
+const settingsContentToggle = document.getElementById('settings-content-toggle');
+const scopeToggle = document.getElementById('scope-toggle');
+const scopeButtons = document.querySelectorAll('.scope-btn');
 let pendingDirs = [];
+
+scopeButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+        scopeButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentScope = btn.dataset.scope;
+        if (searchInput.value.trim()) runSearch();
+    });
+});
 
 function renderSettingsList() {
     settingsList.innerHTML = pendingDirs.map((dir, i) => `
@@ -240,6 +258,9 @@ async function openSettings() {
         const res = await fetch('/api/config');
         const data = await res.json();
         pendingDirs = (data.scan_dirs || []).slice();
+        settingsContentToggle.checked = !!data.content_index_enabled;
+        contentIndexed = data.content_index && data.content_index.chunks > 0;
+        scopeToggle.hidden = !contentIndexed;
         renderSettingsList();
         setSettingsError('');
         settingsModal.hidden = false;
@@ -281,7 +302,7 @@ settingsSave.addEventListener('click', async () => {
         const res = await fetch('/api/config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ scan_dirs: pendingDirs })
+            body: JSON.stringify({ scan_dirs: pendingDirs, content_index_enabled: settingsContentToggle.checked })
         });
         const data = await res.json();
         if (!data.ok) {
@@ -396,9 +417,11 @@ async function runSearch(limit) {
         const res = await fetch('/api/search', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query, category: currentCategory, limit: limit || undefined })
+            body: JSON.stringify({ query, category: currentCategory, limit: limit || undefined, scope: currentScope })
         });
         const data = await res.json();
+        contentIndexed = !!data.content_indexed;
+        scopeToggle.hidden = !contentIndexed;
         lastSearchCounts = data.category_counts || {};
         lastSearchTotal = data.total != null ? data.total : data.results.length;
         applyTabCounts();
