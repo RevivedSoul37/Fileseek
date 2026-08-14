@@ -266,6 +266,21 @@ body {
 }
 .ask-loading { font-size: 13px; color: var(--ink-faint); font-style: italic; padding: 14px 0; }
 .ask-loading-sub { display: block; margin-top: 4px; font-size: 11px; }
+
+/* ── Typed first question — the brass rule slips under the input ── */
+.ask-question-form { display: flex; gap: 8px; padding: 10px 0 4px; }
+.ask-question-input {
+    flex: 1; background: #fffdf4;
+    border: none; border-bottom: 1.5px solid var(--brass-dim);
+    border-radius: 0; padding: 8px 4px;
+    font-family: var(--font-body); font-size: 13.5px; color: var(--ink);
+    outline: none; transition: border-color .15s, box-shadow .15s;
+}
+.ask-question-input::placeholder { font-family: var(--font-mono); font-size: 11px; color: var(--ink-faint); }
+.ask-question-input:focus {
+    border-bottom-color: var(--brass);
+    box-shadow: 0 1px 0 0 rgba(201,162,39,.35);
+}
 .ask-error { font-size: 13px; color: var(--stamp); font-weight: 600; padding: 14px 0; }
 .ask-answer {
     font-size: 13.5px; line-height: 1.65; color: var(--ink);

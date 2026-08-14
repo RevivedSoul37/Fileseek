@@ -26,6 +26,11 @@ in your browser automatically.
 Click **Ask** on any result card. A local Ollama model reads the file and writes a
 plain-language explanation right on the card — no jargon, honest about unknowns.
 
+The panel opens with one input row: *ask in your own words…* Type your own
+question and submit, or press **📮 Ask** with it empty to use the default
+("What is this file and what does it do?"). Your question round-trips into the
+answer footer and seeds the Ask More / Full chat conversation.
+
 - **Code files** (`.py`, `.js`, `.ts`, etc.) are explained by `qwen2.5-coder`;
   everything else by `llama3:8b`.
 - **PDF and Word files** (`.pdf`, `.docx`) get their text extracted locally

@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Ask's first question can be typed: the panel opens with an input row
+  (*ask in your own words…*); empty falls back to the default question, and
+  the typed question round-trips into the answer footer and the Ask More seed.
 - Phase 5: Ask reads real PDF/DOCX contents. `content_reader.py` branches on
   extension — `pypdf` page text for `.pdf`, `python-docx` paragraphs for `.docx`,
   both capped at `ASK_MAX_CHARS` with the existing `[showing first ~N KB]` marker;

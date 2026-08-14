@@ -260,6 +260,15 @@ searchInput.addEventListener('input', () => {
     debouncedSearch();
 });
 
+function askQuestionHtml() {
+    return `
+        <button class="ask-close" data-action="close-ask" title="Close this panel">✕</button>
+        <form class="ask-question-form">
+            <input class="ask-question-input" type="text" placeholder="ask in your own words… (empty = default question)" maxlength="500" autocomplete="off">
+            <button class="icon-btn ask-btn" type="submit">📮 Ask</button>
+        </form>`;
+}
+
 function askLoadingHtml() {
     return `<div class="ask-loading">🔎 Asking the local model to read this file… <span class="ask-loading-sub">first ask after a pause can take a few seconds</span></div>`;
 }
@@ -285,24 +294,15 @@ function askAnswerHtml(data, path) {
         </div>`;
 }
 
-async function askAboutFile(btn) {
-    const card = btn.closest('.result-card');
-    const panel = card ? card.querySelector('.ask-panel') : null;
-    if (!panel) return;
-    if (!panel.hidden && panel.dataset.state === 'done') {
-        panel.hidden = true;
-        panel.dataset.state = '';
-        return;
-    }
+async function submitAsk(panel, path, question) {
     panel.hidden = false;
     panel.dataset.state = 'loading';
     panel.innerHTML = askLoadingHtml();
-    btn.disabled = true;
     try {
         const res = await fetch('/api/ask', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: btn.dataset.path, question: '' })
+            body: JSON.stringify({ path, question: question || '' })
         });
         const data = await res.json();
         if (!data.ok) {
@@ -311,15 +311,34 @@ async function askAboutFile(btn) {
             return;
         }
         panel.dataset.askQuestion = data.question || '';
-        panel.dataset.askPath = btn.dataset.path;
-        panel.innerHTML = askAnswerHtml(data, btn.dataset.path);
+        panel.dataset.askPath = path;
+        panel.innerHTML = askAnswerHtml(data, path);
         panel.dataset.state = 'done';
     } catch (e) {
         panel.innerHTML = askErrorHtml('Server did not respond — is FileSeek still running?');
         panel.dataset.state = 'error';
-    } finally {
-        btn.disabled = false;
     }
+}
+
+function askAboutFile(btn) {
+    const card = btn.closest('.result-card');
+    const panel = card ? card.querySelector('.ask-panel') : null;
+    if (!panel) return;
+    if (!panel.hidden && panel.dataset.state === 'done') {
+        panel.hidden = true;
+        panel.dataset.state = '';
+        return;
+    }
+    if (!panel.hidden && panel.dataset.state === 'question') {
+        const input = panel.querySelector('.ask-question-input');
+        if (input) input.focus();
+        return;
+    }
+    panel.hidden = false;
+    panel.dataset.state = 'question';
+    panel.innerHTML = askQuestionHtml();
+    const input = panel.querySelector('.ask-question-input');
+    if (input) input.focus();
 }
 
 function chatBubbleHtml(turn) {
@@ -502,6 +521,17 @@ resultsEl.addEventListener('click', async (event) => {
 });
 
 resultsEl.addEventListener('submit', (event) => {
+    const askForm = event.target.closest('.ask-question-form');
+    if (askForm) {
+        event.preventDefault();
+        const panel = askForm.closest('.ask-panel');
+        const card = askForm.closest('.result-card');
+        const input = askForm.querySelector('.ask-question-input');
+        const askBtn = card ? card.querySelector('.ask-btn[data-action="ask"]') : null;
+        if (!panel || !askBtn) return;
+        submitAsk(panel, askBtn.dataset.path, (input ? input.value : '').trim());
+        return;
+    }
     const form = event.target.closest('.ask-chat-form');
     if (!form) return;
     event.preventDefault();

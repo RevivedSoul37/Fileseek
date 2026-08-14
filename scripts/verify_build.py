@@ -333,6 +333,8 @@ check("ask 404 for missing file", resp_missing.status_code == 404 and resp_missi
 app_module.explainer.client = stub
 resp_ok = api.post("/api/ask", json={"path": str(code_file)})
 check("ask 200 with answer for text file", resp_ok.status_code == 200 and resp_ok.get_json().get("ok") is True, str(resp_ok.get_json()).strip(". ")[:80])
+resp_custom = api.post("/api/ask", json={"path": str(code_file), "question": "who wrote this?"})
+check("ask echoes a typed custom question", resp_custom.get_json()["question"] == "who wrote this?", resp_custom.get_json()["question"])
 
 class DownOllama:
     def is_available(self):
