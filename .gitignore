@@ -6,6 +6,9 @@ data/fileseek.index
 data/metadata.json
 data/snapshots.json
 data/snapshots.json.tmp
+data/snapshots.json.retired
+data/snapshots.db
+data/snapshots.db-*
 data/activity.json
 data/activity.json.tmp
 data/settings.json

@@ -37,7 +37,8 @@ SENSITIVE_NAME_MARKERS = (
 INDEX_DIR = PROJECT_ROOT / "data"
 INDEX_PATH = INDEX_DIR / "fileseek.index"
 METADATA_PATH = INDEX_DIR / "metadata.json"
-SNAPSHOT_PATH = INDEX_DIR / "snapshots.json"
+SNAPSHOT_PATH = INDEX_DIR / "snapshots.json"  # legacy whole-file store (retired on upgrade)
+SNAPSHOT_DB_PATH = INDEX_DIR / "snapshots.db"
 ACTIVITY_PATH = INDEX_DIR / "activity.json"
 SETTINGS_PATH = INDEX_DIR / "settings.json"
 CONTENT_INDEX_PATH = INDEX_DIR / "content.index"
@@ -53,7 +54,7 @@ CONTENT_MAX_CHUNKS_PER_FILE = 128
 CONTENT_MATCH_FLOOR = 0.35
 CONTENT_SNIPPET_CHARS = 140
 
-DIFF_MAX_BYTES = 512 * 1024
+DIFF_MAX_BYTES = 64 * 1024
 DIFF_MAX_LINES = 20_000
 SNAPSHOT_MAX_HASH_BYTES = 64 * 1024 * 1024
 

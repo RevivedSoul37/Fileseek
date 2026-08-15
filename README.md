@@ -76,7 +76,7 @@ catalog current in real time:
   next search shows you *what moved* since you last looked.
 - Junk folders (`node_modules`, `.git`, caches…) stay unwatched by name; the
   index folder itself is excluded so FileSeek never watches itself.
-- Snapshots persist to `data/snapshots.json`, so diffs survive restarts.
+- Snapshots persist to a SQLite drawer (`data/snapshots.db`) — one row per file, per-event writes, lazy startup — so diffs survive restarts without the old 500 MB whole-file rewrite.
 
 ---
 
@@ -176,7 +176,7 @@ crawler  embedder  index_store ranker  app.py    watcher/  assistant/
 | `src/modules/search/engine.py` | query → embedding → nearest neighbours + match counts |
 | `src/modules/search/ranker.py` | 60% semantic · 25% exact · 10% recency · 5% size |
 | `src/modules/watcher/monitor.py` | recursive `watchdog` observer, event queue, debounced batches |
-| `src/modules/watcher/snapshot_store.py` + `diff.py` | file snapshots → line-level change-diff summaries |
+| `src/modules/watcher/snapshot_store.py` + `diff.py` | SQLite snapshot drawer → line-level change-diff summaries |
 | `src/modules/watcher/sync.py` | applies batches to the index: add / remove / re-embed |
 | `src/modules/watcher/activity_log.py` | capped 200-entry feed of applied changes (`data/activity.json`) |
 | `src/modules/assistant/explainer.py` | Ask: read file → pick model → plain-language answer |

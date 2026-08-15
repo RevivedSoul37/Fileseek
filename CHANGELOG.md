@@ -23,14 +23,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `SnapshotStore.remove_prefix`, `config.effective_scan_dirs`.
 
 ### Changed
-- README/guide corrections from the audit: binary answers need Ollama up;
+- README/guide corrections from the audit:
+- `data/snapshots.json` redesign IMPLEMENTED (plan in
+  `private/plans/snapshot-store-redesign.md`, direction chosen by user: SQLite
+  drawer + capped copies): snapshots now live in `data/snapshots.db`, one row
+  per file with per-event commits; excerpts capped at 64 KB (was 512 KB);
+  startup opens the drawer lazily; the legacy `snapshots.json` is retired in
+  one rename on first start and deleted once the drawer is seeded. binary answers need Ollama up;
   the privacy line now says your *files* never leave the machine (the UI
   fetches fonts from Google); chat non-persistence and Windows-only listed
   as known limitations; verify suite count updated to 120.
 
-### Deferred
-- `data/snapshots.json` size/churn redesign — planned in
-  `private/plans/snapshot-store-redesign.md`; deferred by user decision.
 
 ## [1.2.0] - 2026-08-15
 

@@ -260,7 +260,7 @@ def api_status():
         "indexing": index_state["running"],
         "progress": index_state["progress"],
         "watching": watcher.running,
-        "snapshot_count": len(watcher.snapshots.snapshots),
+        "snapshot_count": len(watcher.snapshots),
         "ask_available": ask_available,
     })
 
@@ -463,7 +463,7 @@ def _start_watcher_if_ready():
         return
     watcher.seed_snapshots()
     if watcher.start():
-        index_state["progress"] = f"Watcher live ({len(watcher.snapshots.snapshots)} snapshots)"
+        index_state["progress"] = f"Watcher live ({len(watcher.snapshots)} snapshots)"
     else:
         log.warning("Watcher failed to start")
 

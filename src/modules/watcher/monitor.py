@@ -109,12 +109,14 @@ class WatcherService:
     def seed_snapshots(self):
         """First run only: snapshot every file currently in the index so later
         changes produce real line diffs. Expensive (hashes up to 13k files),
-        so it runs in a background thread and is skipped if snapshots.json
-        already exists. Files that change mid-seed are handled correctly by
-        sync (they fall back to a size-delta diff for that first change)."""
-        if self.snapshots.path.exists():
-            self.snapshots.load()
-            log.info("Snapshots loaded (%d entries)", len(self.snapshots.snapshots))
+        so it runs in a background thread and is skipped when the drawer
+        already holds entries. load() also retires the legacy whole-file
+        snapshots.json in one rename; the finished seed deletes that copy.
+        Files that change mid-seed are handled correctly by sync (they fall
+        back to a size-delta diff for that first change)."""
+        self.snapshots.load()
+        if len(self.snapshots) > 0:
+            log.info("Snapshot drawer loaded (%d entries)", len(self.snapshots))
             return None
 
         def _seed():
